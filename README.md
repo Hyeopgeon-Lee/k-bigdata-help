@@ -67,9 +67,9 @@ email_sent_at
 
 ```javascript
 const CONFIG = Object.freeze({
-  SPREADSHEET_ID: "YOUR_SPREADSHEET_ID",
+  SPREADSHEET_ID: "1B7iS7AQqKORuNivoala5xcFyPEKlZ9bJKMwuJJkd-Kw",
   SHEET_NAME: "requests",
-  ADMIN_EMAIL: "YOUR_ADMIN_EMAIL", // 관리자 메일은 이 한 곳만 변경
+  ADMIN_EMAIL: "hglee67@kopo.ac.kr", // 관리자 메일은 이 한 곳만 변경
   ADMIN_ACCESS_KEY: "CHANGE_TO_A_LONG_RANDOM_KEY",
   TIMEZONE: "Asia/Seoul",
   SERVICE_NAME: "BigData Help",
