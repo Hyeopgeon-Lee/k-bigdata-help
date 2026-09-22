@@ -1,5 +1,5 @@
 window.APP_CONFIG = Object.freeze({
-  API_URL: "YOUR_GOOGLE_APPS_SCRIPT_URL",
+  API_URL: "https://script.google.com/macros/s/AKfycbwCWe_BgUrbewpKymmYfXiBDj0edWWk1WyBURkGyT5LlziFliy5jOzB3pJc-cCJm4jS/exec",
   SERVICE_NAME: "BigData Help",
   REQUEST_CATEGORIES: [
     "PC·실습실 장애",
