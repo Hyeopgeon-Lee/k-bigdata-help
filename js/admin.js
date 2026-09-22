@@ -11,7 +11,9 @@
   const authForm = document.querySelector("#admin-auth");
   const workspace = document.querySelector("#admin-workspace");
   let requests = [];
-  let adminKey = sessionStorage.getItem("bigDataHelpAdminKey") || "";
+  const urlAdminKey = new URLSearchParams(window.location.search).get("key") || "";
+  let adminKey = urlAdminKey.trim() || sessionStorage.getItem("bigDataHelpAdminKey") || "";
+  if (urlAdminKey.trim()) sessionStorage.setItem("bigDataHelpAdminKey", urlAdminKey.trim());
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
