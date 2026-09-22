@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173b68"><title>관리자 | BigData Help</title><link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-page">
+  <header class="site-header"><div class="header-inner"><a class="brand" href="index.html"><span>BigData Help 관리자</span><small>요청 처리 센터</small></a></div></header>
+  <main class="page page--admin">
+    <div class="page-title"><p class="eyebrow">Help Desk</p><h1>요청 관리</h1><p>접수된 요청을 확인하고 상태와 답변을 관리합니다.</p></div>
+    <form id="admin-auth" class="form-card form-card--compact admin-auth">
+      <label>관리자 접근 키<input name="adminKey" type="password" required autocomplete="current-password" placeholder="Apps Script에 설정한 접근 키"></label>
+      <button class="button button--primary" type="submit">관리 화면 열기</button>
+    </form>
+    <p id="admin-notice" class="notice" role="status"></p>
+    <div id="admin-workspace" hidden>
+    <div id="admin-summary" class="admin-summary"></div>
+    <div class="toolbar">
+      <label>상태 필터<select id="status-filter"><option value="ALL">전체</option><option value="RECEIVED">접수</option><option value="CHECKING">확인중</option><option value="PROCESSING">처리중</option><option value="COMPLETED">완료</option></select></label>
+      <label class="check-label"><input id="include-deleted" type="checkbox"> 삭제된 요청 포함</label>
+    </div>
+    <section id="admin-list" class="admin-list" aria-live="polite"></section>
+    </div>
+  </main>
+  <script src="js/config.js"></script><script src="js/api.js"></script><script src="js/admin.js"></script>
+</body>
+</html>

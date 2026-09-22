@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173b68"><title>요청 등록 | BigData Help</title><link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="index.html"><span>BigData Help</span><small>학과 요청·문의</small></a></div></header>
+  <main class="page page--form">
+    <div class="page-title"><p class="eyebrow">새 티켓</p><h1>요청 등록</h1><p>정확한 처리를 위해 아래 내용을 자세히 작성해주세요.</p></div>
+    <form id="request-form" class="form-card">
+      <label>요청 유형 <span class="required">필수</span><select id="category" name="category" required></select></label>
+      <label>장소 <span class="required">필수</span><select id="location" name="location" required></select></label>
+      <label>제목 <span class="required">필수</span><input name="title" type="text" required placeholder="요청 제목을 입력하세요" autocomplete="off"></label>
+      <label>상세 내용 <span class="required">필수</span><textarea name="content" required rows="7" placeholder="증상 또는 요청사항을 작성해주세요"></textarea></label>
+      <div class="form-row">
+        <label>이름 <span class="required">필수</span><input name="studentName" type="text" required maxlength="30" placeholder="이름" autocomplete="name"></label>
+        <label>학번 <span class="required">필수</span><input name="studentId" type="text" required maxlength="20" placeholder="학번" inputmode="numeric" autocomplete="username"></label>
+      </div>
+      <label>PIN 4자리 <span class="required">필수</span><input name="pin" type="password" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autocomplete="new-password" placeholder="4자리 숫자"></label>
+      <div class="help-box">PIN은 요청 조회 및 삭제 시 사용됩니다. PIN을 잊어버리면 본인 요청 조회 및 삭제가 어려울 수 있습니다.</div>
+      <p id="form-feedback" class="form-feedback" role="alert"></p>
+      <button id="submit-request" class="button button--primary button--large" type="submit">요청 등록하기</button>
+    </form>
+    <section id="request-success" class="success-card" tabindex="-1" hidden>
+      <div class="success-icon">✓</div><h2>요청이 정상적으로 등록되었습니다.</h2><p>요청번호 <strong id="created-request-id"></strong></p>
+      <a class="button button--primary" href="my.html">내 요청 확인하기</a><a class="button button--secondary" href="index.html">홈으로</a>
+    </section>
+  </main>
+  <nav class="bottom-nav" aria-label="주요 메뉴"><a href="index.html"><span>⌂</span>홈</a><a class="active" href="request.html" aria-current="page"><span>＋</span>요청 등록</a><a href="my.html"><span>◎</span>내 요청</a></nav>
+  <script src="js/config.js"></script><script src="js/api.js"></script><script src="js/request.js"></script>
+</body>
+</html>
