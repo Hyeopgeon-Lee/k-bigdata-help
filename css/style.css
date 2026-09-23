@@ -5,3 +5,20 @@
 @media (max-width:430px){.page{padding-left:13px;padding-right:13px}.hero-card{padding:24px 20px}.hero-card h1{font-size:24px}.status-grid{gap:5px}.status-stat{padding:13px 3px}.form-card{padding:18px}.form-row{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.section-heading span{display:none}}
 .admin-auth{width:100%;max-width:520px;margin:0 0 18px}.admin-auth .button{width:100%}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* Responsive desktop navigation and home layout */
+.header-inner{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.desktop-nav{display:none;align-items:center;gap:6px}
+.desktop-nav a{padding:10px 15px;border-radius:10px;color:var(--muted);font-size:14px;font-weight:750}
+.desktop-nav a:hover{color:var(--navy);background:#f1f5f9}
+.desktop-nav a.active{color:#fff;background:var(--navy)}
+.page--home{max-width:1080px}
+@media (min-width:760px){
+  .desktop-nav{display:flex}
+  .page{padding-top:38px;padding-bottom:60px}
+  .bottom-nav{display:none}
+  .hero-card{padding:44px 42px}
+  .hero-card h1{max-width:720px;font-size:36px}
+  .hero-card>p:not(.eyebrow){max-width:720px}
+}
+@media (min-width:900px){.page--home .ticket-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
