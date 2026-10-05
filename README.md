@@ -63,23 +63,13 @@ email_sent_at
 
 ## Apps Script 설정과 배포
 
-상세 절차는 [apps-script/README.md](apps-script/README.md)를 따릅니다. 필수 설정 위치는 [apps-script/Code.gs](apps-script/Code.gs) 맨 위 `CONFIG`입니다.
+상세 절차는 [apps-script/README.md](apps-script/README.md)를 따릅니다. 민감 설정은 저장소에 넣지 않고 Apps Script **프로젝트 설정 → 스크립트 속성**에서 관리합니다.
 
-```javascript
-const CONFIG = Object.freeze({
-  SPREADSHEET_ID: "1B7iS7AQqKORuNivoala5xcFyPEKlZ9bJKMwuJJkd-Kw",
-  SHEET_NAME: "requests",
-  ADMIN_EMAIL: "hglee67@kopo.ac.kr", // 관리자 메일은 이 한 곳만 변경
-  ADMIN_ACCESS_KEY: "CHANGE_TO_A_LONG_RANDOM_KEY",
-  TIMEZONE: "Asia/Seoul",
-  SERVICE_NAME: "BigData Help",
-  SERVICE_URL: "https://help.k-bigdata.kr/"
-});
-```
+필수 Script Properties:
+- `SPREADSHEET_ID`: 운영 Google Sheet ID
+- `ADMIN_ACCESS_KEY`: 길고 추측하기 어려운 관리자 접근 키
 
-`ADMIN_ACCESS_KEY`에는 사전에 공유하지 않은 긴 무작위 문자열을 넣습니다. 관리자 페이지는 이 값을 브라우저 `sessionStorage`에만 보관합니다. 이 키는 최소한의 접근 제한이며 완전한 계정 인증을 대신하지 않습니다. 더 강한 보안이 필요하면 향후 Google Workspace 로그인/허용 계정 검증을 추가해야 합니다.
-
-관리자 페이지는 즐겨찾기용 `?key=관리자접근키` 파라미터를 지원합니다. 키가 맞으면 입력 화면 없이 관리 목록을 불러오며, 페이지에는 `no-referrer` 정책을 적용해 외부 링크의 Referer로 URL이 전달되지 않도록 합니다. URL 자체에는 키가 포함되므로 즐겨찾기 동기화, 브라우저 기록, 화면 공유 시 노출되지 않도록 주의해야 합니다.
+`ADMIN_EMAIL`, `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 코드의 비밀정보가 아닌 운영 설정으로 유지합니다. 관리자 키는 브라우저 `sessionStorage`에만 보관하며 URL query string으로 받지 않습니다. 이 키는 최소한의 접근 제한이며 완전한 계정 인증을 대신하지 않습니다.
 
 Web App 배포는 다음 값을 사용합니다.
 
@@ -160,7 +150,6 @@ Apps Script 프로젝트 설정의 시간대를 `Asia/Seoul`로 지정하고 `cr
 
 - Google Workspace 계정 기반 관리자 인증과 권한 검사
 - 관리자 변경 이력/Audit Log
-- 접근 키 Script Properties 이전 및 교체 UI
 - 요청 유형/장소를 별도 설정 시트에서 관리
 - 데이터 보존 기간 및 개인정보 파기 정책
 
