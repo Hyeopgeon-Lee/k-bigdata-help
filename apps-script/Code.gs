@@ -1,9 +1,7 @@
 /** BigData Help - Google Apps Script Web App (V8 runtime) */
 const CONFIG = Object.freeze({
-  SPREADSHEET_ID: "1B7iS7AQqKORuNivoala5xcFyPEKlZ9bJKMwuJJkd-Kw",
   SHEET_NAME: "requests",
   ADMIN_EMAIL: "hglee67@kopo.ac.kr",
-  ADMIN_ACCESS_KEY: "CHANGE_TO_A_LONG_RANDOM_KEY",
   TIMEZONE: "Asia/Seoul",
   SERVICE_NAME: "BigData Help",
   SERVICE_URL: "https://help.k-bigdata.kr/",
@@ -22,6 +20,10 @@ const CATEGORIES = Object.freeze([
   "프로젝트 지원", "취업·진로 문의", "학과 운영 건의", "기타"
 ]);
 const LOCATIONS = Object.freeze(["8311호", "8318호", "8319호", "기타"]);
+
+function scriptProperty_(key) {
+  return String(PropertiesService.getScriptProperties().getProperty(key) || "").trim();
+}
 
 function doGet(e) {
   return routeRequest_(e && e.parameter ? e.parameter : {});
@@ -259,7 +261,9 @@ function buildEmailText_(rows) {
 }
 
 function getSheet_(createIfMissing) {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const spreadsheetId = scriptProperty_("SPREADSHEET_ID");
+  if (!spreadsheetId) throw new Error("SPREADSHEET_ID_NOT_CONFIGURED");
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
   let sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
   if (!sheet && createIfMissing) sheet = spreadsheet.insertSheet(CONFIG.SHEET_NAME);
   if (!sheet) throw new Error("SHEET_NOT_FOUND");
@@ -295,16 +299,20 @@ function studentView_(row) {
     title: row.title, content: row.content, status: row.status, adminReply: row.admin_reply || "", updatedAt: iso_(row.updated_at) };
 }
 function assertAdmin_(params) {
-  if (!CONFIG.ADMIN_ACCESS_KEY || CONFIG.ADMIN_ACCESS_KEY === "CHANGE_TO_A_LONG_RANDOM_KEY" || !secureEqual_(clean_(params.adminKey), CONFIG.ADMIN_ACCESS_KEY)) {
+  const accessKey = scriptProperty_("ADMIN_ACCESS_KEY");
+  if (!accessKey || !secureEqual_(clean_(params.adminKey), accessKey)) {
     throw new Error("ADMIN_UNAUTHORIZED");
   }
 }
 function validateConfiguration_(requireEmail) {
-  if (!CONFIG.SPREADSHEET_ID || CONFIG.SPREADSHEET_ID === "YOUR_SPREADSHEET_ID") throw new Error("SPREADSHEET_ID_NOT_CONFIGURED");
+  if (!scriptProperty_("SPREADSHEET_ID")) throw new Error("SPREADSHEET_ID_NOT_CONFIGURED");
+  if (!scriptProperty_("ADMIN_ACCESS_KEY")) throw new Error("ADMIN_UNAUTHORIZED");
   if (requireEmail && (!CONFIG.ADMIN_EMAIL || CONFIG.ADMIN_EMAIL === "YOUR_ADMIN_EMAIL")) throw new Error("ADMIN_EMAIL_NOT_CONFIGURED");
 }
 function hashPin_(requestId, pin) {
-  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, `${CONFIG.SPREADSHEET_ID}:${requestId}:${pin}`, Utilities.Charset.UTF_8);
+  const spreadsheetId = scriptProperty_("SPREADSHEET_ID");
+  if (!spreadsheetId) throw new Error("SPREADSHEET_ID_NOT_CONFIGURED");
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, `${spreadsheetId}:${requestId}:${pin}`, Utilities.Charset.UTF_8);
   return bytes.map(byte => (byte + 256) % 256).map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 function secureEqual_(left, right) {
