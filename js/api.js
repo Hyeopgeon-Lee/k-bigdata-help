@@ -43,7 +43,7 @@
     myRequests: (studentId, pin) => request("myRequests", { studentId, pin }, "POST"),
     deleteRequest: (requestId, studentId, pin) =>
       request("delete", { requestId, studentId, pin }, "POST"),
-    adminList: (includeDeleted = false, adminKey = "") => request("adminList", { includeDeleted: String(includeDeleted), adminKey }),
+    adminList: (includeDeleted = false, adminKey = "") => request("adminList", { includeDeleted: String(includeDeleted), adminKey }, "POST"),
     update: (requestId, status, adminReply, adminKey = "") =>
       request("update", { requestId, status, adminReply, adminKey }, "POST")
   });

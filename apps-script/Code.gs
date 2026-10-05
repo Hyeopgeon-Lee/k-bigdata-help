@@ -26,13 +26,25 @@ function scriptProperty_(key) {
 }
 
 function doGet(e) {
-  return routeRequest_(e && e.parameter ? e.parameter : {});
+  const params = e && e.parameter ? e.parameter : {};
+  if (params.adminKey || clean_(params.action) !== "list") return json_(false, null, "METHOD_NOT_ALLOWED");
+  return routeRequest_(params);
 }
 
 function doPost(e) {
-  let params = e && e.parameter ? e.parameter : {};
+  if (e && /(?:^|&)adminKey(?:=|&|$)/i.test(String(e.queryString || ""))) return json_(false, null, "KEY_IN_URL_NOT_ALLOWED");
+  let params = {};
   if (e && e.postData && e.postData.type && e.postData.type.indexOf("application/json") > -1) {
     try { params = JSON.parse(e.postData.contents || "{}"); } catch (error) { return json_(false, null, "INVALID_JSON"); }
+  } else if (e && e.postData) {
+    try {
+      String(e.postData.contents || "").split("&").forEach(pair => {
+        const separator = pair.indexOf("=");
+        const decode = value => decodeURIComponent(value.replace(/\+/g, " "));
+        const key = decode(separator < 0 ? pair : pair.slice(0, separator));
+        if (key) params[key] = decode(separator < 0 ? "" : pair.slice(separator + 1));
+      });
+    } catch (error) { return json_(false, null, "INVALID_FORM"); }
   }
   return routeRequest_(params);
 }

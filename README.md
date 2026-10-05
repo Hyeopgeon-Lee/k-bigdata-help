@@ -91,7 +91,7 @@ API_URL: "https://script.google.com/macros/s/배포_ID/exec"
 | `create` | POST | 새 요청 생성 (`RECEIVED`) | PIN 해시 저장 |
 | `myRequests` | POST | 학번+PIN 본인 요청 조회 | 일치 티켓만 반환 |
 | `delete` | POST | 학번+PIN+요청번호로 Soft Delete | 행 유지 |
-| `adminList` | GET | 관리자 전체 요청 | 관리자 키 필요, PIN 제외 |
+| `adminList` | POST | 관리자 전체 요청 | 본문의 관리자 키 필요, PIN 제외 |
 | `update` | POST | 상태와 관리자 답변 수정 | 관리자 키 필요 |
 
 프론트엔드는 CORS 사전 요청 문제를 줄이기 위해 POST를 `application/x-www-form-urlencoded`로 전송합니다. Apps Script는 JSON POST도 처리할 수 있습니다.
