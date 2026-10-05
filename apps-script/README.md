@@ -15,19 +15,16 @@
 3. 기본 `Code.gs` 내용을 모두 지우고 저장소의 `apps-script/Code.gs` 전체를 붙여넣습니다.
 4. **프로젝트 설정 → 시간대**를 `(GMT+09:00) 서울`로 선택합니다.
 
-## 3. 필수 CONFIG 입력
+## 3. Script Properties 설정
 
-`Code.gs` 맨 위에서 다음 세 값을 반드시 바꿉니다.
+Apps Script **프로젝트 설정 → 스크립트 속성**에서 다음 값을 등록합니다.
 
-```javascript
-SPREADSHEET_ID: "복사한_스프레드시트_ID",
-ADMIN_EMAIL: "요약_메일을_받을_관리자_주소",
-ADMIN_ACCESS_KEY: "길고_추측하기_어려운_무작위_문자열",
-```
+| 키 | 값 |
+|---|---|
+| `SPREADSHEET_ID` | 복사한 Google Sheet ID |
+| `ADMIN_ACCESS_KEY` | 길고 추측하기 어려운 무작위 문자열 |
 
-- 관리자 이메일은 `ADMIN_EMAIL` 한 곳만 수정하면 됩니다. 코드의 다른 위치에는 하드코딩하지 않습니다.
-- `ADMIN_ACCESS_KEY`는 관리자 화면과 API를 보호하는 공유 키입니다. 저장소에 실제 값을 커밋하지 마세요.
-- `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 기본값을 유지해도 됩니다.
+실제 ID와 관리자 키는 저장소에 커밋하지 않습니다. 관리자 이메일은 `Code.gs`의 `ADMIN_EMAIL`에서 관리하고, `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 기본값을 유지해도 됩니다.
 
 ## 4. 시트 초기화
 
@@ -94,7 +91,7 @@ https://script.google.com/macros/s/배포_ID/exec?action=list
 - 메일 일일 할당량
 - Apps Script 권한 승인
 - Spreadsheet 접근 권한
-- CONFIG의 ID와 시트 헤더
+- Script Properties의 ID·관리자 키와 시트 헤더
 
 메일 전송 성공 후 `email_sent_at`이 기록되므로 같은 요청은 다음 실행에서 제외됩니다. `email_sent_at`이 있는 행을 수동으로 `RECEIVED`로 되돌려도 중복 발송하지 않습니다.
 
