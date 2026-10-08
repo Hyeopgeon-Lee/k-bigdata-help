@@ -1,0 +1,94 @@
+name: Deploy Apps Script
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps-script/**"
+      - "tests/**"
+      - ".github/workflows/deploy-gas.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: k-bigdata-help-apps-script-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+      GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+      CLASP_CREDENTIALS_JSON: ${{ secrets.CLASP_CREDENTIALS_JSON }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run security regression tests
+        run: node --test tests/security.test.mjs
+
+      - name: Validate Apps Script manifest
+        shell: bash
+        run: node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('appsscript.json valid')"
+
+      - name: Check deployment configuration
+        id: gas_config
+        shell: bash
+        run: |
+          if [[ -n "$GAS_SCRIPT_ID" && -n "$GAS_DEPLOYMENT_ID" && -n "$CLASP_CREDENTIALS_JSON" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Apps Script deployment secrets are configured."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Apps Script deployment skipped. Configure GAS_SCRIPT_ID, GAS_DEPLOYMENT_ID, and CLASP_CREDENTIALS_JSON repository secrets."
+          fi
+
+      - name: Install clasp
+        if: steps.gas_config.outputs.ready == 'true'
+        run: npm install --global @google/clasp@3.4.1
+
+      - name: Prepare clasp configuration
+        if: steps.gas_config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          rm -f apps-script/README.md
+          cat > .clasp.ci.json <<EOF
+          {
+            "scriptId": "$GAS_SCRIPT_ID",
+            "rootDir": "apps-script"
+          }
+          EOF
+          printf '%s' "$CLASP_CREDENTIALS_JSON" > .clasprc.ci.json
+          chmod 600 .clasprc.ci.json
+
+      - name: Verify clasp authentication
+        if: steps.gas_config.outputs.ready == 'true'
+        run: clasp --project .clasp.ci.json --auth .clasprc.ci.json show-authorized-user
+
+      - name: Push source to Apps Script
+        if: steps.gas_config.outputs.ready == 'true'
+        run: clasp --project .clasp.ci.json --auth .clasprc.ci.json push --force
+
+      - name: Redeploy existing Web App
+        if: steps.gas_config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          clasp --project .clasp.ci.json --auth .clasprc.ci.json create-deployment \
+            --deploymentId "$GAS_DEPLOYMENT_ID" \
+            --description "GitHub Actions ${GITHUB_SHA::7}"
+
+      - name: Remove temporary credentials
+        if: always()
+        shell: bash
+        run: rm -f .clasp.ci.json .clasprc.ci.json
