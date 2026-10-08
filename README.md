@@ -6,7 +6,7 @@
 - 프론트엔드: GitHub Pages, HTML/CSS/Vanilla JavaScript
 - 백엔드: Google Apps Script Web App
 - 저장소: Google Sheets
-- 알림: 매일 오전 8시대 HTML 요약 메일
+- 알림: 요청 등록 즉시 HTML 메일 + 실패/미발송 요청 오전 8시 재알림
 
 ## 프로젝트 구조
 
@@ -40,8 +40,11 @@
 - 내 요청: 학번과 4자리 PIN이 모두 일치하는 활성 요청을 최신순 표시
 - 학생 삭제: 행을 지우지 않고 `is_deleted=TRUE`, `deleted_at` 기록
 - 관리자: 접근 키 확인 후 전체 요청, 상태 필터, 삭제 요청 포함 보기, 상태/답변 수정
-- 메일: 삭제되지 않은 `RECEIVED` 요청 중 `email_sent_at`이 비어 있는 요청만 오래된 순으로 한 통에 요약
-- 메일 성공 후에만 대상 티켓을 `CHECKING`으로 변경하고 `updated_at`, `email_sent_at` 기록
+- 즉시 메일: 요청 등록 직후 `hglee67@kopo.ac.kr`로 요청 제목·유형·장소·요청자·학번·상세 내용·요청번호를 HTML 메일로 발송
+- 관리자 자동 로그인: 메일의 버튼은 30분 유효·1회용 링크이며 관리자 화면에서 자동 인증 후 요청 목록을 표시
+- 보안: 기존 `ADMIN_ACCESS_KEY`는 URL에 넣지 않고, 메일 링크의 일회용 토큰도 URL query가 아니라 fragment(`#magic=`)로 전달한 뒤 POST body에서 교환
+- 즉시 메일 성공 후에만 해당 티켓을 `CHECKING`으로 변경하고 `updated_at`, `email_sent_at` 기록
+- 오전 8시 메일: 즉시 메일 실패 등으로 `RECEIVED`이면서 `email_sent_at`이 비어 있는 요청만 재알림
 - PIN: 평문이 아니라 SHA-256 해시 문자열로 저장되며 공개/관리자 API, 메일, 로그에 포함하지 않음
 - 오류 화면: API 미설정 및 네트워크 오류 시 안내 표시
 
@@ -102,20 +105,23 @@ GitHub의 `apps-script/`를 Apps Script 원본 소스로 사용하며, GAS 관�
 
 프론트엔드는 CORS 사전 요청 문제를 줄이기 위해 POST를 `application/x-www-form-urlencoded`로 전송합니다. Apps Script는 JSON POST도 처리할 수 있습니다.
 
-## 오전 8시 자동메일
+## 요청 즉시 메일과 오전 8시 재알림
 
-Apps Script 프로젝트 설정의 시간대를 `Asia/Seoul`로 지정하고 `createDailyTrigger()`를 최초 1회 실행합니다. 함수가 기존 `sendDailyRequestSummary` 트리거를 확인하므로 동일 트리거를 중복 생성하지 않습니다. Apps Script 시간 기반 Trigger 특성상 정확히 08:00:00이 아니라 오전 8시대에 실행됩니다.
+학생이 새 요청을 등록하면 Apps Script가 즉시 `hglee67@kopo.ac.kr`로 HTML 메일을 발송합니다. 메일에는 요청 제목, 요청 유형, 장소, 요청자 이름, 학번, 상세 내용, 등록 시각, 요청번호가 포함됩니다.
 
-처리 순서:
+메일의 **관리자 화면에서 확인하기** 버튼은 `admin.html#magic=...` 형식의 일회용 링크입니다. 링크 토큰은 Apps Script Cache에 30분 동안만 보관되며 한 번 사용하면 즉시 폐기됩니다. 관리자 화면은 토큰을 URL에서 지운 뒤 POST body로 교환하여 최대 6시간 유효한 임시 관리자 세션을 발급받습니다. 기존 `ADMIN_ACCESS_KEY`는 URL이나 메일에 노출하지 않으며, 자동 로그인 링크가 만료되었을 때만 기존 관리자 접근 키 로그인 화면을 사용합니다.
+
+즉시 메일 발송이 성공한 경우에만 해당 요청의 상태를 `CHECKING`으로 바꾸고 `updated_at`, `email_sent_at`을 기록합니다. 즉시 메일이 실패하면 요청 등록 자체는 유지하고 상태를 `RECEIVED`로 남겨 둡니다.
+
+Apps Script 프로젝트 설정의 시간대를 `Asia/Seoul`로 지정하고 `createDailyTrigger()`를 최초 1회 실행하면 기존 오전 8시대 요약 메일이 재알림 역할을 합니다.
 
 1. `requests` 시트를 읽습니다.
 2. `status=RECEIVED`, `is_deleted!=TRUE`, `email_sent_at` 공백인 티켓만 선택합니다.
 3. 0건이면 메일을 발송하지 않고 종료합니다.
-4. 오래된 요청부터 HTML 카드 한 통으로 묶어 `ADMIN_EMAIL`에 보냅니다.
-5. 메일 전송 함수가 성공한 후에만 대상 상태를 `CHECKING`으로 변경합니다.
-6. 같은 시각으로 `updated_at`, `email_sent_at`을 기록합니다.
+4. 즉시 메일 실패 등 아직 알림되지 않은 요청만 한 통으로 묶어 발송합니다.
+5. 메일 전송 성공 후에만 대상 상태를 `CHECKING`으로 변경하고 `updated_at`, `email_sent_at`을 기록합니다.
 
-메일 발송이 예외로 실패하면 상태와 `email_sent_at`을 변경하지 않습니다. 오류는 Apps Script의 **실행** 로그에서 확인할 수 있습니다. `email_sent_at`이 이미 있는 비정상 `RECEIVED` 행도 다시 보내지 않아 중복 메일을 방지합니다.
+따라서 정상적인 요청은 등록 즉시 한 번 알림되고, 즉시 메일이 실패한 요청만 오전 8시 재알림 대상으로 남습니다.
 
 ## 자동메일 테스트
 
