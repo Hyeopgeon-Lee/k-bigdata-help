@@ -12,6 +12,7 @@
   const workspace = document.querySelector("#admin-workspace");
   let requests = [];
   let adminKey = sessionStorage.getItem("bigDataHelpAdminKey") || "";
+  let adminSessionToken = sessionStorage.getItem("bigDataHelpAdminSession") || "";
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
@@ -71,12 +72,18 @@
       return;
     }
     try {
-      requests = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminKey);
+      requests = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminKey, adminSessionToken);
       renderSummary();
       renderList();
       notice.textContent = "";
     } catch (error) {
-      notice.textContent = error.message === "ADMIN_UNAUTHORIZED" ? "관리자 접근 키가 올바르지 않습니다." : "요청 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
+      if (error.message === "ADMIN_UNAUTHORIZED") {
+        adminSessionToken = "";
+        sessionStorage.removeItem("bigDataHelpAdminSession");
+        notice.textContent = "관리자 인증이 만료되었거나 접근 키가 올바르지 않습니다.";
+      } else {
+        notice.textContent = "요청 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
+      }
       workspace.hidden = true;
       authForm.hidden = false;
     }
@@ -91,7 +98,7 @@
     const button = form.querySelector("button");
     button.disabled = true;
     try {
-      await window.BigDataHelpAPI.update(form.dataset.id, form.status.value, form.adminReply.value.trim(), adminKey);
+      await window.BigDataHelpAPI.update(form.dataset.id, form.status.value, form.adminReply.value.trim(), adminKey, adminSessionToken);
       notice.textContent = "저장되었습니다.";
       await load();
     } catch (error) {
@@ -103,14 +110,52 @@
   authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     adminKey = authForm.adminKey.value.trim();
+    adminSessionToken = "";
+    sessionStorage.removeItem("bigDataHelpAdminSession");
     sessionStorage.setItem("bigDataHelpAdminKey", adminKey);
     authForm.hidden = true;
     workspace.hidden = false;
     await load();
   });
-  if (adminKey) {
+
+  async function redeemMagicLink() {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const magicToken = params.get("magic");
+    if (!magicToken) return false;
+
+    history.replaceState(null, "", window.location.pathname + window.location.search);
     authForm.hidden = true;
-    workspace.hidden = false;
-    load();
+    workspace.hidden = true;
+    notice.textContent = "메일의 관리자 로그인 링크를 확인하고 있습니다...";
+
+    try {
+      const result = await window.BigDataHelpAPI.redeemAdminMagic(magicToken);
+      adminSessionToken = result.adminSessionToken || "";
+      if (!adminSessionToken) throw new Error("ADMIN_MAGIC_INVALID");
+      sessionStorage.setItem("bigDataHelpAdminSession", adminSessionToken);
+      sessionStorage.removeItem("bigDataHelpAdminKey");
+      adminKey = "";
+      workspace.hidden = false;
+      notice.textContent = "관리자 자동 로그인이 완료되었습니다.";
+      await load();
+      return true;
+    } catch (error) {
+      adminSessionToken = "";
+      sessionStorage.removeItem("bigDataHelpAdminSession");
+      notice.textContent = error.message === "ADMIN_MAGIC_EXPIRED" || error.message === "ADMIN_MAGIC_INVALID"
+        ? "메일의 자동 로그인 링크가 만료되었거나 이미 사용되었습니다. 관리자 접근 키로 로그인해주세요."
+        : "자동 로그인에 실패했습니다. 관리자 접근 키로 로그인해주세요.";
+      authForm.hidden = false;
+      return false;
+    }
   }
+
+  (async function init() {
+    if (await redeemMagicLink()) return;
+    if (adminSessionToken || adminKey) {
+      authForm.hidden = true;
+      workspace.hidden = false;
+      await load();
+    }
+  })();
 })();
