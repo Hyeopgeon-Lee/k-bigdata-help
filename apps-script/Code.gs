@@ -6,7 +6,9 @@ const CONFIG = Object.freeze({
   SERVICE_NAME: "BigData Help",
   SERVICE_URL: "https://help.k-bigdata.kr/",
   MAX_TITLE_LENGTH: 80,
-  MAX_CONTENT_LENGTH: 2000
+  MAX_CONTENT_LENGTH: 2000,
+  ADMIN_MAGIC_TTL_SECONDS: 1800,
+  ADMIN_SESSION_TTL_SECONDS: 21600
 });
 
 const HEADERS = Object.freeze([
@@ -27,12 +29,16 @@ function scriptProperty_(key) {
 
 function doGet(e) {
   const params = e && e.parameter ? e.parameter : {};
-  if (params.adminKey || clean_(params.action) !== "list") return json_(false, null, "METHOD_NOT_ALLOWED");
+  if (params.adminKey || params.adminSessionToken || params.magicToken || clean_(params.action) !== "list") {
+    return json_(false, null, "METHOD_NOT_ALLOWED");
+  }
   return routeRequest_(params);
 }
 
 function doPost(e) {
-  if (e && /(?:^|&)adminKey(?:=|&|$)/i.test(String(e.queryString || ""))) return json_(false, null, "KEY_IN_URL_NOT_ALLOWED");
+  if (e && /(?:^|&)(?:adminKey|adminSessionToken|magicToken)(?:=|&|$)/i.test(String(e.queryString || ""))) {
+    return json_(false, null, "KEY_IN_URL_NOT_ALLOWED");
+  }
   let params = {};
   if (e && e.postData && e.postData.type && e.postData.type.indexOf("application/json") > -1) {
     try { params = JSON.parse(e.postData.contents || "{}"); } catch (error) { return json_(false, null, "INVALID_JSON"); }
@@ -59,6 +65,7 @@ function routeRequest_(params) {
       case "create": data = createRequest_(params); break;
       case "myRequests": data = getMyRequests_(params); break;
       case "delete": data = deleteRequest_(params); break;
+      case "redeemAdminMagic": data = redeemAdminMagic_(params); break;
       case "adminList": assertAdmin_(params); data = listAdmin_(params); break;
       case "update": assertAdmin_(params); data = updateRequest_(params); break;
       default: return json_(false, null, "UNKNOWN_ACTION");
@@ -94,6 +101,7 @@ function createRequest_(params) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  let created;
   try {
     const sheet = getSheet_(true);
     const now = new Date();
@@ -103,10 +111,28 @@ function createRequest_(params) {
       requestId, now, input.studentId, input.studentName, pinHash, input.category, input.location,
       input.title, input.content, "RECEIVED", "", now, false, "", ""
     ]);
-    return { requestId: requestId, status: "RECEIVED", createdAt: now.toISOString() };
+    created = {
+      requestId: requestId,
+      createdAt: now,
+      rowNumber: sheet.getLastRow(),
+      studentId: input.studentId,
+      studentName: input.studentName,
+      category: input.category,
+      location: input.location,
+      title: input.title,
+      content: input.content
+    };
   } finally {
     lock.releaseLock();
   }
+
+  let status = "RECEIVED";
+  try {
+    if (sendImmediateRequestNotification_(created)) status = "CHECKING";
+  } catch (error) {
+    console.error("즉시 요청 알림 메일 발송 실패: " + String(error && error.stack ? error.stack : error));
+  }
+  return { requestId: created.requestId, status: status, createdAt: created.createdAt.toISOString() };
 }
 
 function listPublic_() {
@@ -173,6 +199,91 @@ function updateRequest_(params) {
   sheet.getRange(row._rowNumber, HEADERS.indexOf("admin_reply") + 1).setValue(adminReply);
   sheet.getRange(row._rowNumber, HEADERS.indexOf("updated_at") + 1).setValue(new Date());
   return { requestId: requestId, status: status, adminReply: adminReply };
+}
+
+function randomToken_() {
+  return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
+}
+
+function createAdminMagicLink_(requestId) {
+  const token = randomToken_();
+  CacheService.getScriptCache().put("ADMIN_MAGIC_" + token, String(requestId || ""), CONFIG.ADMIN_MAGIC_TTL_SECONDS);
+  return CONFIG.SERVICE_URL.replace(/\/$/, "") + "/admin.html#magic=" + encodeURIComponent(token);
+}
+
+function redeemAdminMagic_(params) {
+  const token = clean_(params.magicToken);
+  if (!/^[A-Za-z0-9_-]{40,100}$/.test(token)) throw new Error("ADMIN_MAGIC_INVALID");
+  const cache = CacheService.getScriptCache();
+  const key = "ADMIN_MAGIC_" + token;
+  const requestId = cache.get(key);
+  if (requestId == null) throw new Error("ADMIN_MAGIC_EXPIRED");
+  cache.remove(key);
+
+  const sessionToken = randomToken_();
+  cache.put("ADMIN_SESSION_" + sessionToken, "1", CONFIG.ADMIN_SESSION_TTL_SECONDS);
+  return {
+    adminSessionToken: sessionToken,
+    expiresInSeconds: CONFIG.ADMIN_SESSION_TTL_SECONDS,
+    requestId: requestId
+  };
+}
+
+function isAdminSessionValid_(token) {
+  token = clean_(token);
+  if (!/^[A-Za-z0-9_-]{40,100}$/.test(token)) return false;
+  return CacheService.getScriptCache().get("ADMIN_SESSION_" + token) === "1";
+}
+
+function sendImmediateRequestNotification_(request) {
+  validateConfiguration_(true);
+  const adminUrl = createAdminMagicLink_(request.requestId);
+  const contentHtml = escapeHtml_(request.content).replace(/\r?\n/g, "<br>");
+  const subject = `[${CONFIG.SERVICE_NAME}] 새 요청: ${request.title}`;
+  const htmlBody = `<!doctype html><html><body style="margin:0;padding:0;background:#f2f5f8;font-family:Arial,'Apple SD Gothic Neo',sans-serif;color:#172333;">
+    <div style="max-width:680px;margin:0 auto;padding:24px 12px;">
+      <div style="padding:28px 24px;border-radius:18px 18px 0 0;background:#173b68;color:#ffffff;">
+        <div style="font-size:24px;font-weight:800;">BigData Help</div>
+        <div style="margin-top:5px;color:#cfe0f2;font-size:14px;">새 학과 요청이 접수되었습니다.</div>
+      </div>
+      <div style="padding:24px;background:#ffffff;">
+        <div style="margin:0 0 18px;padding:18px;border:1px solid #dfe5ec;border-radius:14px;background:#ffffff;">
+          <div style="margin-bottom:8px;color:#2875c7;font-size:13px;font-weight:700;">${escapeHtml_(request.category)}</div>
+          <h1 style="margin:0 0 16px;color:#172333;font-size:21px;line-height:1.45;">${escapeHtml_(request.title)}</h1>
+          <table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px;color:#344255;">
+            <tr><td style="width:82px;padding:5px 0;color:#788495;">장소</td><td style="padding:5px 0;">${escapeHtml_(request.location)}</td></tr>
+            <tr><td style="padding:5px 0;color:#788495;">요청자</td><td style="padding:5px 0;">${escapeHtml_(request.studentName)} / ${escapeHtml_(request.studentId)}</td></tr>
+            <tr><td style="padding:5px 0;color:#788495;vertical-align:top;">요청 내용</td><td style="padding:5px 0;line-height:1.7;">${contentHtml}</td></tr>
+            <tr><td style="padding:5px 0;color:#788495;">등록</td><td style="padding:5px 0;">${formatDateTime_(request.createdAt)}</td></tr>
+            <tr><td style="padding:5px 0;color:#788495;">요청번호</td><td style="padding:5px 0;font-family:monospace;">${escapeHtml_(request.requestId)}</td></tr>
+          </table>
+        </div>
+        <div style="padding:8px 0 2px;text-align:center;">
+          <a href="${adminUrl}" style="display:inline-block;padding:14px 24px;border-radius:10px;background:#2875c7;color:#ffffff;text-decoration:none;font-weight:700;">관리자 화면에서 확인하기</a>
+        </div>
+        <p style="margin:18px 0 0;color:#7b8795;font-size:12px;line-height:1.65;text-align:center;">
+          버튼을 누르면 관리자 화면으로 이동해 자동 인증됩니다.<br>
+          자동 로그인 링크는 30분 동안 유효하며 한 번만 사용할 수 있습니다. 만료된 경우 기존 관리자 접근 키로 로그인할 수 있습니다.
+        </p>
+      </div>
+    </div></body></html>`;
+  const textBody = `${CONFIG.SERVICE_NAME} 새 요청\n\n[${request.category}] ${request.title}\n장소: ${request.location}\n요청자: ${request.studentName} / ${request.studentId}\n요청 내용: ${request.content}\n등록: ${formatDateTime_(request.createdAt)}\n요청번호: ${request.requestId}\n\n관리자 자동 로그인: ${adminUrl}`;
+
+  MailApp.sendEmail({
+    to: CONFIG.ADMIN_EMAIL,
+    subject: subject,
+    htmlBody: htmlBody,
+    body: textBody,
+    name: CONFIG.SERVICE_NAME
+  });
+
+  const sheet = getSheet_(false);
+  const now = new Date();
+  sheet.getRange(request.rowNumber, HEADERS.indexOf("status") + 1).setValue("CHECKING");
+  sheet.getRange(request.rowNumber, HEADERS.indexOf("updated_at") + 1).setValue(now);
+  sheet.getRange(request.rowNumber, HEADERS.indexOf("email_sent_at") + 1).setValue(now);
+  SpreadsheetApp.flush();
+  return true;
 }
 
 function sendDailyRequestSummary() {
@@ -311,6 +422,7 @@ function studentView_(row) {
     title: row.title, content: row.content, status: row.status, adminReply: row.admin_reply || "", updatedAt: iso_(row.updated_at) };
 }
 function assertAdmin_(params) {
+  if (isAdminSessionValid_(params.adminSessionToken)) return;
   const accessKey = scriptProperty_("ADMIN_ACCESS_KEY");
   if (!accessKey || !secureEqual_(clean_(params.adminKey), accessKey)) {
     throw new Error("ADMIN_UNAUTHORIZED");
@@ -341,7 +453,7 @@ function iso_(value) { if (!value) return ""; const date = value instanceof Date
 function formatDateTime_(value) { const date = value instanceof Date ? value : new Date(value); return Utilities.formatDate(date, CONFIG.TIMEZONE, "yyyy.MM.dd HH:mm"); }
 function escapeHtml_(value) { return String(value == null ? "" : value).replace(/[&<>\"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]); }
 function safeErrorMessage_(error) {
-  const allowed = ["VALIDATION_ERROR", "NOT_FOUND_OR_UNAUTHORIZED", "REQUEST_NOT_FOUND", "ADMIN_UNAUTHORIZED", "SPREADSHEET_ID_NOT_CONFIGURED", "ADMIN_EMAIL_NOT_CONFIGURED", "SHEET_NOT_FOUND", "INVALID_SHEET_HEADERS"];
+  const allowed = ["VALIDATION_ERROR", "NOT_FOUND_OR_UNAUTHORIZED", "REQUEST_NOT_FOUND", "ADMIN_UNAUTHORIZED", "ADMIN_MAGIC_INVALID", "ADMIN_MAGIC_EXPIRED", "SPREADSHEET_ID_NOT_CONFIGURED", "ADMIN_EMAIL_NOT_CONFIGURED", "SHEET_NOT_FOUND", "INVALID_SHEET_HEADERS"];
   const message = error && error.message ? error.message : "SERVER_ERROR";
   return allowed.indexOf(message) > -1 ? message : "SERVER_ERROR";
 }
