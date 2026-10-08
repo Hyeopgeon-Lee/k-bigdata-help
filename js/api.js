@@ -43,8 +43,11 @@
     myRequests: (studentId, pin) => request("myRequests", { studentId, pin }, "POST"),
     deleteRequest: (requestId, studentId, pin) =>
       request("delete", { requestId, studentId, pin }, "POST"),
-    adminList: (includeDeleted = false, adminKey = "") => request("adminList", { includeDeleted: String(includeDeleted), adminKey }, "POST"),
-    update: (requestId, status, adminReply, adminKey = "") =>
-      request("update", { requestId, status, adminReply, adminKey }, "POST")
+    redeemAdminMagic: (magicToken) =>
+      request("redeemAdminMagic", { magicToken }, "POST"),
+    adminList: (includeDeleted = false, adminKey = "", adminSessionToken = "") =>
+      request("adminList", { includeDeleted: String(includeDeleted), adminKey, adminSessionToken }, "POST"),
+    update: (requestId, status, adminReply, adminKey = "", adminSessionToken = "") =>
+      request("update", { requestId, status, adminReply, adminKey, adminSessionToken }, "POST")
   });
 })();
