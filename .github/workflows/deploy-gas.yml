@@ -1,6 +1,8 @@
 name: Deploy Apps Script
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - main
@@ -36,13 +38,17 @@ jobs:
           node-version: "22"
 
       - name: Run security regression tests
-        run: node --test tests/security.test.mjs
+        run: node --test tests/*.test.mjs
+
+      - name: Validate frontend syntax
+        run: for file in js/*.js; do node --check "$file"; done
 
       - name: Validate Apps Script manifest
         shell: bash
         run: node -e "JSON.parse(require('fs').readFileSync('apps-script/appsscript.json','utf8')); console.log('appsscript.json valid')"
 
       - name: Check deployment configuration
+        if: github.event_name != 'pull_request'
         id: gas_config
         shell: bash
         run: |

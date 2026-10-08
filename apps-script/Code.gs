@@ -108,8 +108,8 @@ function createRequest_(params) {
     const requestId = nextRequestId_(sheet, now);
     const pinHash = hashPin_(requestId, input.pin);
     sheet.appendRow([
-      requestId, now, input.studentId, input.studentName, pinHash, input.category, input.location,
-      input.title, input.content, "RECEIVED", "", now, false, "", ""
+      requestId, now, sheetText_(input.studentId), sheetText_(input.studentName), pinHash, input.category, input.location,
+      sheetText_(input.title), sheetText_(input.content), "RECEIVED", "", now, false, "", ""
     ]);
     created = {
       requestId: requestId,
@@ -122,6 +122,7 @@ function createRequest_(params) {
       title: input.title,
       content: input.content
     };
+    invalidatePublic_();
   } finally {
     lock.releaseLock();
   }
@@ -136,17 +137,26 @@ function createRequest_(params) {
 }
 
 function listPublic_() {
+  const key = "PUBLIC_LIST_" + (scriptProperty_("PUBLIC_REVISION") || "initial");
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(key);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) { cache.remove(key); }
+  }
   const rows = readRows_().filter(row => !isTrue_(row.is_deleted));
   const counts = { RECEIVED: 0, CHECKING: 0, PROCESSING: 0, COMPLETED: 0 };
   rows.forEach(row => { if (Object.prototype.hasOwnProperty.call(counts, row.status)) counts[row.status]++; });
   rows.sort((a, b) => dateValue_(b.created_at) - dateValue_(a.created_at));
-  return {
+  const result = {
     counts: counts,
     requests: rows.slice(0, 10).map(row => ({
       requestId: row.request_id, category: row.category, location: row.location, title: row.title,
       status: row.status, createdAt: iso_(row.created_at)
     }))
   };
+  // Cache only the public projection. A concurrent mutation changes the key.
+  try { cache.put(key, JSON.stringify(result), 30); } catch (_) {}
+  return result;
 }
 
 function getMyRequests_(params) {
@@ -160,18 +170,20 @@ function getMyRequests_(params) {
 }
 
 function deleteRequest_(params) {
+  return withMutation_(() => deleteRequestUnlocked_(params));
+}
+
+function deleteRequestUnlocked_(params) {
   const requestId = clean_(params.requestId);
   const studentId = clean_(params.studentId);
   const pin = clean_(params.pin);
   if (!requestId || !studentId || !/^\d{4}$/.test(pin)) throw new Error("VALIDATION_ERROR");
   const sheet = getSheet_(false);
-  const rows = readRows_();
-  const row = rows.find(item => item.request_id === requestId && !isTrue_(item.is_deleted));
+  const row = findRequest_(sheet, requestId);
+  if (row && isTrue_(row.is_deleted)) throw new Error("NOT_FOUND_OR_UNAUTHORIZED");
   if (!row || String(row.student_id) !== studentId || !secureEqual_(String(row.pin), hashPin_(requestId, pin))) throw new Error("NOT_FOUND_OR_UNAUTHORIZED");
   const now = new Date();
-  sheet.getRange(row._rowNumber, HEADERS.indexOf("is_deleted") + 1).setValue(true);
-  sheet.getRange(row._rowNumber, HEADERS.indexOf("deleted_at") + 1).setValue(now);
-  sheet.getRange(row._rowNumber, HEADERS.indexOf("updated_at") + 1).setValue(now);
+  sheet.getRange(row._rowNumber, 12, 1, 3).setValues([[now, true, now]]);
   return { requestId: requestId, deleted: true };
 }
 
@@ -188,16 +200,18 @@ function listAdmin_(params) {
 }
 
 function updateRequest_(params) {
+  return withMutation_(() => updateRequestUnlocked_(params));
+}
+
+function updateRequestUnlocked_(params) {
   const requestId = clean_(params.requestId);
   const status = clean_(params.status);
   const adminReply = clean_(params.adminReply);
   if (!requestId || STATUSES.indexOf(status) === -1 || adminReply.length > 2000) throw new Error("VALIDATION_ERROR");
   const sheet = getSheet_(false);
-  const row = readRows_().find(item => item.request_id === requestId && !isTrue_(item.is_deleted));
-  if (!row) throw new Error("REQUEST_NOT_FOUND");
-  sheet.getRange(row._rowNumber, HEADERS.indexOf("status") + 1).setValue(status);
-  sheet.getRange(row._rowNumber, HEADERS.indexOf("admin_reply") + 1).setValue(adminReply);
-  sheet.getRange(row._rowNumber, HEADERS.indexOf("updated_at") + 1).setValue(new Date());
+  const row = findRequest_(sheet, requestId);
+  if (!row || isTrue_(row.is_deleted)) throw new Error("REQUEST_NOT_FOUND");
+  sheet.getRange(row._rowNumber, 10, 1, 3).setValues([[status, sheetText_(adminReply), new Date()]]);
   return { requestId: requestId, status: status, adminReply: adminReply };
 }
 
@@ -212,6 +226,12 @@ function createAdminMagicLink_(requestId) {
 }
 
 function redeemAdminMagic_(params) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try { return redeemAdminMagicUnlocked_(params); } finally { lock.releaseLock(); }
+}
+
+function redeemAdminMagicUnlocked_(params) {
   const token = clean_(params.magicToken);
   if (!/^[A-Za-z0-9_-]{40,100}$/.test(token)) throw new Error("ADMIN_MAGIC_INVALID");
   const cache = CacheService.getScriptCache();
@@ -236,6 +256,14 @@ function isAdminSessionValid_(token) {
 }
 
 function sendImmediateRequestNotification_(request) {
+  return withMutation_(() => sendImmediateRequestNotificationUnlocked_(request));
+}
+
+function sendImmediateRequestNotificationUnlocked_(request) {
+  const sheet = getSheet_(false);
+  const row = findRequest_(sheet, request.requestId);
+  if (!row || isTrue_(row.is_deleted)) return false;
+  if (row.email_sent_at) return row.status === "CHECKING";
   validateConfiguration_(true);
   const adminUrl = createAdminMagicLink_(request.requestId);
   const contentHtml = escapeHtml_(request.content).replace(/\r?\n/g, "<br>");
@@ -277,13 +305,16 @@ function sendImmediateRequestNotification_(request) {
     name: CONFIG.SERVICE_NAME
   });
 
-  const sheet = getSheet_(false);
-  const now = new Date();
-  sheet.getRange(request.rowNumber, HEADERS.indexOf("status") + 1).setValue("CHECKING");
-  sheet.getRange(request.rowNumber, HEADERS.indexOf("updated_at") + 1).setValue(now);
-  sheet.getRange(request.rowNumber, HEADERS.indexOf("email_sent_at") + 1).setValue(now);
-  SpreadsheetApp.flush();
-  return true;
+  {
+    const now = new Date();
+    // Preserve a concurrent administrator update or student deletion.
+    const checking = row.status === "RECEIVED" && !isTrue_(row.is_deleted);
+    sheet.getRange(row._rowNumber, 10, 1, 6).setValues([[
+      checking ? "CHECKING" : row.status, sheetText_(row.admin_reply), now,
+      row.is_deleted, row.deleted_at, now
+    ]]);
+    return checking;
+  }
 }
 
 function sendDailyRequestSummary() {
@@ -292,7 +323,7 @@ function sendDailyRequestSummary() {
   lock.waitLock(30000);
   try {
     const sheet = getSheet_(false);
-    const pending = readRows_().filter(row =>
+    const pending = readRows_(sheet).filter(row =>
       row.status === "RECEIVED" && !isTrue_(row.is_deleted) && !row.email_sent_at
     ).sort((a, b) => dateValue_(a.created_at) - dateValue_(b.created_at));
     if (!pending.length) {
@@ -307,11 +338,9 @@ function sendDailyRequestSummary() {
 
     const now = new Date();
     pending.forEach(row => {
-      sheet.getRange(row._rowNumber, HEADERS.indexOf("status") + 1).setValue("CHECKING");
-      sheet.getRange(row._rowNumber, HEADERS.indexOf("updated_at") + 1).setValue(now);
-      sheet.getRange(row._rowNumber, HEADERS.indexOf("email_sent_at") + 1).setValue(now);
+      sheet.getRange(row._rowNumber, 10, 1, 6).setValues([["CHECKING", sheetText_(row.admin_reply), now, row.is_deleted, row.deleted_at, now]]);
     });
-    SpreadsheetApp.flush();
+    invalidatePublic_();
     console.log(`${pending.length}건 메일 발송 및 CHECKING 전환 완료`);
     return { sent: true, count: pending.length };
   } catch (error) {
@@ -396,10 +425,11 @@ function getSheet_(createIfMissing) {
   return sheet;
 }
 
-function readRows_() {
-  const sheet = getSheet_(true);
-  if (sheet.getLastRow() < 2) return [];
-  return sheet.getRange(2, 1, sheet.getLastRow() - 1, HEADERS.length).getValues().map((values, index) => {
+function readRows_(sheet) {
+  sheet = sheet || getSheet_(true);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues().map((values, index) => {
     const row = { _rowNumber: index + 2 };
     HEADERS.forEach((header, column) => { row[header] = values[column]; });
     return row;
@@ -459,4 +489,31 @@ function safeErrorMessage_(error) {
 }
 function json_(success, data, message) {
   return ContentService.createTextOutput(JSON.stringify({ success: success, data: data, message: message })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// A new generation prevents in-flight readers repopulating an invalidated key.
+function invalidatePublic_() {
+  SpreadsheetApp.flush();
+  PropertiesService.getScriptProperties().setProperty("PUBLIC_REVISION", Utilities.getUuid());
+}
+function withMutation_(operation) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try { const result = operation(); invalidatePublic_(); return result; }
+  finally { lock.releaseLock(); }
+}
+function findRequest_(sheet, requestId) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const cell = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(requestId)
+    .matchEntireCell(true).useRegularExpression(false).findNext();
+  if (!cell) return null;
+  const values = sheet.getRange(cell.getRow(), 1, 1, HEADERS.length).getValues()[0];
+  const row = { _rowNumber: cell.getRow() };
+  HEADERS.forEach((header, column) => { row[header] = values[column]; });
+  return row;
+}
+function sheetText_(value) {
+  // Sheets otherwise interprets a leading '=' as a formula.
+  return /^[=+@-]/.test(value) || /^0\d+$/.test(value) ? "'" + value : value;
 }

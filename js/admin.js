@@ -11,6 +11,8 @@
   const authForm = document.querySelector("#admin-auth");
   const workspace = document.querySelector("#admin-workspace");
   let requests = [];
+  let loadVersion = 0;
+  let saving = false;
   let adminKey = sessionStorage.getItem("bigDataHelpAdminKey") || "";
   let adminSessionToken = sessionStorage.getItem("bigDataHelpAdminSession") || "";
 
@@ -20,12 +22,14 @@
     })[char]);
   }
 
-  function formatDate(value) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("ko-KR", {
+  const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
       year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
       hour12: false, timeZone: "Asia/Seoul"
-    }).format(date);
+    });
+
+  function formatDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
   }
 
   function renderSummary() {
@@ -66,17 +70,21 @@
   }
 
   async function load() {
+    const version = ++loadVersion;
     notice.textContent = "불러오는 중...";
     if (!window.BigDataHelpAPI.isConfigured()) {
       notice.textContent = "API가 설정되지 않았습니다. js/config.js에 Web App URL을 입력해주세요.";
       return;
     }
     try {
-      requests = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminKey, adminSessionToken);
+      const data = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminKey, adminSessionToken);
+      if (version !== loadVersion) return;
+      requests = data;
       renderSummary();
       renderList();
       notice.textContent = "";
     } catch (error) {
+      if (version !== loadVersion) return;
       if (error.message === "ADMIN_UNAUTHORIZED") {
         adminSessionToken = "";
         sessionStorage.removeItem("bigDataHelpAdminSession");
@@ -95,14 +103,29 @@
     const form = event.target.closest(".admin-update-form");
     if (!form) return;
     event.preventDefault();
+    if (saving) return;
+    saving = true;
+    ++loadVersion;
+    includeDeleted.disabled = true;
     const button = form.querySelector("button");
     button.disabled = true;
     try {
-      await window.BigDataHelpAPI.update(form.dataset.id, form.status.value, form.adminReply.value.trim(), adminKey, adminSessionToken);
+      const updated = await window.BigDataHelpAPI.update(form.dataset.id, form.status.value, form.adminReply.value.trim(), adminKey, adminSessionToken);
+      ++loadVersion;
+      const item = requests.find(item => item.requestId === updated.requestId);
+      if (item) Object.assign(item, updated);
+      renderSummary();
+      const details = form.closest("details");
+      const badge = details.querySelector(".badge");
+      badge.className = "badge badge--" + updated.status.toLowerCase();
+      badge.textContent = statusNames[updated.status];
+      if (filter.value !== "ALL" && filter.value !== updated.status) renderList();
       notice.textContent = "저장되었습니다.";
-      await load();
     } catch (error) {
       notice.textContent = "저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
+    } finally {
+      saving = false;
+      includeDeleted.disabled = false;
       button.disabled = false;
     }
   });

@@ -6,6 +6,8 @@
   const results = document.querySelector("#my-results");
   const statusNames = { RECEIVED: "접수", CHECKING: "확인중", PROCESSING: "처리중", COMPLETED: "완료" };
   let credentials = null;
+  let items = [];
+  let busy = false;
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
@@ -13,12 +15,14 @@
     })[char]);
   }
 
-  function formatDate(value) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("ko-KR", {
+  const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
       year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
       hour12: false, timeZone: "Asia/Seoul"
-    }).format(date);
+    });
+
+  function formatDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "" : dateFormatter.format(date);
   }
 
   function render(items) {
@@ -40,6 +44,7 @@
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (busy) return;
     feedback.textContent = "";
     const studentId = form.studentId.value.trim();
     const pin = form.pin.value.trim();
@@ -53,28 +58,37 @@
     }
     const button = form.querySelector("button[type=submit]");
     button.disabled = true;
+    busy = true;
+    credentials = null;
+    results.innerHTML = "";
     try {
+      items = await window.BigDataHelpAPI.myRequests(studentId, pin);
       credentials = { studentId, pin };
-      render(await window.BigDataHelpAPI.myRequests(studentId, pin));
+      render(items);
     } catch (error) {
       feedback.textContent = "요청 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
     } finally {
+      busy = false;
       button.disabled = false;
     }
   });
 
   results.addEventListener("click", async (event) => {
     const button = event.target.closest(".delete-request");
-    if (!button || !credentials) return;
+    if (!button || !credentials || busy || button.disabled) return;
     if (!window.confirm("이 요청을 삭제하시겠습니까?\n\n삭제하면 내 요청 화면에서 더 이상 확인할 수 없습니다.")) return;
+    busy = true;
     button.disabled = true;
     try {
       await window.BigDataHelpAPI.deleteRequest(button.dataset.id, credentials.studentId, credentials.pin);
-      render(await window.BigDataHelpAPI.myRequests(credentials.studentId, credentials.pin));
+      items = items.filter(item => item.requestId !== button.dataset.id);
+      render(items);
       feedback.textContent = "요청이 삭제되었습니다.";
     } catch (error) {
       feedback.textContent = "요청을 삭제하지 못했습니다. 입력 정보와 네트워크 상태를 확인해주세요.";
       button.disabled = false;
+    } finally {
+      busy = false;
     }
   });
 })();
