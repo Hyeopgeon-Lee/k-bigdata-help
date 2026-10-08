@@ -13,11 +13,13 @@
     })[char]);
   }
 
+  const dateFormatter = new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", timeZone: "Asia/Seoul" });
+
   function formatDate(value) {
     if (!value) return "";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
-    return new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", timeZone: "Asia/Seoul" })
+    return dateFormatter
       .format(date).replace(/\.\s?/g, "/").replace(/\/$/, "");
   }
 

@@ -52,6 +52,7 @@ test('administrator magic link uses URL fragment, is one-time, and creates a tem
   const context = vm.createContext({
     console,
     encodeURIComponent,
+    LockService: { getScriptLock: () => ({waitLock() {}, releaseLock() {}}) },
     CacheService: {
       getScriptCache: () => ({
         put: (key, value) => cache.set(key, String(value)),

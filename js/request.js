@@ -21,6 +21,7 @@
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (submit.disabled) return;
     feedback.textContent = "";
     if (!window.BigDataHelpAPI.isConfigured()) {
       feedback.textContent = "API가 아직 설정되지 않았습니다. 운영자에게 문의해주세요.";

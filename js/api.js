@@ -36,18 +36,35 @@
     return result.data;
   }
 
+  // Coalesce concurrent reads only; never store credentials or completed private data.
+  const pendingReads = new Map();
+  let revision = 0;
+  function read(action, data = {}, method = "GET") {
+    const key = JSON.stringify([revision, action, data]);
+    if (!pendingReads.has(key)) {
+      const pending = request(action, data, method).finally(() => pendingReads.delete(key));
+      pendingReads.set(key, pending);
+    }
+    return pendingReads.get(key);
+  }
+  async function mutate(action, data) {
+    const result = await request(action, data, "POST");
+    revision++;
+    return result;
+  }
+
   window.BigDataHelpAPI = Object.freeze({
     isConfigured,
-    list: () => request("list"),
-    create: (payload) => request("create", payload, "POST"),
-    myRequests: (studentId, pin) => request("myRequests", { studentId, pin }, "POST"),
+    list: () => read("list"),
+    create: (payload) => mutate("create", payload),
+    myRequests: (studentId, pin) => read("myRequests", { studentId, pin }, "POST"),
     deleteRequest: (requestId, studentId, pin) =>
-      request("delete", { requestId, studentId, pin }, "POST"),
+      mutate("delete", { requestId, studentId, pin }),
     redeemAdminMagic: (magicToken) =>
       request("redeemAdminMagic", { magicToken }, "POST"),
     adminList: (includeDeleted = false, adminKey = "", adminSessionToken = "") =>
-      request("adminList", { includeDeleted: String(includeDeleted), adminKey, adminSessionToken }, "POST"),
+      read("adminList", { includeDeleted: String(includeDeleted), adminKey, adminSessionToken }, "POST"),
     update: (requestId, status, adminReply, adminKey = "", adminSessionToken = "") =>
-      request("update", { requestId, status, adminReply, adminKey, adminSessionToken }, "POST")
+      mutate("update", { requestId, status, adminReply, adminKey, adminSessionToken })
   });
 })();
