@@ -83,6 +83,12 @@ Web App 배포는 다음 값을 사용합니다.
 API_URL: "https://script.google.com/macros/s/배포_ID/exec"
 ```
 
+## Apps Script 자동배포
+
+GitHub의 `apps-script/`를 Apps Script 원본 소스로 사용하며, GAS 관련 변경이 `main`에 반영되면 GitHub Actions가 보안 회귀 테스트 후 clasp로 기존 Web App 배포를 갱신할 수 있습니다.
+
+최초 1회 GitHub Actions Secret 3개 설정이 필요합니다. 자세한 절차는 [GAS_AUTO_DEPLOY](docs/GAS_AUTO_DEPLOY.md)를 참고합니다.
+
 ## API action
 
 | action | 방식 | 설명 | 개인정보 |
