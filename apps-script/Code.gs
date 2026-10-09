@@ -19,9 +19,9 @@ const HEADERS = Object.freeze([
 const STATUSES = Object.freeze(["RECEIVED", "CHECKING", "PROCESSING", "COMPLETED"]);
 const CATEGORIES = Object.freeze([
   "PC·실습실 장애", "소프트웨어 설치·오류", "네트워크·인터넷", "시설·비품", "수업 관련",
-  "프로젝트 지원", "취업·진로 문의", "학과 운영 건의", "기타"
+  "프로젝트 지원", "취업·진로 문의", "학과 운영 건의", "학습문제 오류 신고", "기타"
 ]);
-const LOCATIONS = Object.freeze(["8311호", "8315호", "8316호", "8317호", "8318호", "8319호", "8320호", "기타"]);
+const LOCATIONS = Object.freeze(["8311호", "8315호", "8316호", "8317호", "8318호", "8319호", "8320호", "온라인 포털", "기타"]);
 
 function scriptProperty_(key) {
   return String(PropertiesService.getScriptProperties().getProperty(key) || "").trim();
@@ -98,6 +98,11 @@ function createRequest_(params) {
       input.studentName.length > 30 || input.studentId.length > 20 || CATEGORIES.indexOf(input.category) === -1 || LOCATIONS.indexOf(input.location) === -1) {
     throw new Error("VALIDATION_ERROR");
   }
+  if (input.category === "학습문제 오류 신고" && (input.location !== "온라인 포털" ||
+      !/^문제 유형: (실기문제|기술면접)\n문제 ID: [a-zA-Z0-9_-]{1,80}\n/.test(input.content) ||
+      !/\n오류 구분: [^\n]+\n신고 내용:\n\S/.test(input.content))) {
+    throw new Error("VALIDATION_ERROR");
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -105,6 +110,15 @@ function createRequest_(params) {
   try {
     const sheet = getSheet_(true);
     const now = new Date();
+    // Same student's identical report within 10 minutes returns the original ticket.
+    // Different explanations and reports by different students are preserved.
+    if (input.category === "학습문제 오류 신고") {
+      const existing = readRows_().find(row => !isTrue_(row.is_deleted) &&
+        String(row.student_id) === input.studentId && String(row.category) === input.category &&
+        String(row.content) === input.content && now.getTime() - dateValue_(row.created_at) < 600000);
+      if (existing) return { requestId: existing.request_id, status: existing.status,
+        createdAt: iso_(existing.created_at), duplicate: true };
+    }
     const requestId = nextRequestId_(sheet, now);
     const pinHash = hashPin_(requestId, input.pin);
     sheet.appendRow([
