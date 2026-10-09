@@ -43,11 +43,11 @@
     interview: ["질문 오류", "모범답안 오류", "핵심 용어 오류", "설명 부족", "기타"]
   };
 
-  fillOptions(category, config.REQUEST_CATEGORIES, "요청 유형을 선택하세요");
+  const report = getReportContext();
+  fillOptions(category, config.REQUEST_CATEGORIES.filter(value => report || value !== "학습문제 오류 신고"), "요청 유형을 선택하세요");
   fillOptions(locationSelect, config.LOCATIONS, "장소를 선택하세요");
   form.elements.title.maxLength = config.LIMITS.title;
   form.elements.content.maxLength = config.LIMITS.content;
-  const report = getReportContext();
 
   if (report) {
     document.querySelector("#learning-report-panel").hidden = false;
