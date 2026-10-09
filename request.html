@@ -24,10 +24,22 @@
   <main class="page page--form">
     <div class="page-title"><p class="eyebrow">새 티켓</p><h1>요청 등록</h1><p>정확한 처리를 위해 아래 내용을 자세히 작성해주세요.</p></div>
     <form id="request-form" class="form-card">
+      <section id="learning-report-panel" class="learning-report-panel" aria-labelledby="learning-report-title" hidden>
+        <h2 id="learning-report-title">학습문제 오류 신고</h2>
+        <p>문제 번호와 원문 링크는 자동으로 첨부됩니다. 오류로 생각되는 부분을 구체적으로 작성해 주세요.</p>
+        <div class="learning-report-context">
+          <strong id="report-question-title"></strong>
+          <p id="report-question-meta"></p>
+          <a id="report-question-link" href="https://portal.k-bigdata.kr/" target="_blank" rel="noopener noreferrer">원문 문제 확인 ↗</a>
+        </div>
+        <label>오류 유형 <span class="required">필수</span><select id="report-reason"></select></label>
+        <label>어떤 부분이 잘못되었나요? <span class="required">필수</span><textarea id="report-description" maxlength="1100" rows="5" placeholder="예: 정답의 두 번째 출력 값이 코드 실행 결과와 다릅니다."></textarea></label>
+        <p class="learning-report-note">신고는 검토 요청이며, 제출만으로 오류가 확정되거나 정답이 자동 변경되지는 않습니다.</p>
+      </section>
       <label>요청 유형 <span class="required">필수</span><select id="category" name="category" required></select></label>
       <label>장소 <span class="required">필수</span><select id="location" name="location" required></select></label>
       <label>제목 <span class="required">필수</span><input name="title" type="text" required placeholder="요청 제목을 입력하세요" autocomplete="off"></label>
-      <label>상세 내용 <span class="required">필수</span><textarea name="content" required rows="7" placeholder="증상 또는 요청사항을 작성해주세요"></textarea></label>
+      <label id="request-content-label">상세 내용 <span class="required">필수</span><textarea name="content" required rows="7" placeholder="증상 또는 요청사항을 작성해주세요"></textarea></label>
       <div class="form-row">
         <label>이름 <span class="required">필수</span><input name="studentName" type="text" required maxlength="30" placeholder="이름" autocomplete="name"></label>
         <label>학번 <span class="required">필수</span><input name="studentId" type="text" required maxlength="20" placeholder="학번" inputmode="numeric" autocomplete="username"></label>
@@ -43,6 +55,6 @@
     </section>
   </main>
   <nav class="bottom-nav" aria-label="주요 메뉴"><a href="index.html"><span>⌂</span>홈</a><a class="active" href="request.html" aria-current="page"><span>＋</span>요청 등록</a><a href="my.html"><span>◎</span>내 요청</a></nav>
-  <script src="js/config.js?v=20261009-rooms"></script><script src="js/api.js"></script><script src="js/request.js"></script>
+  <script src="js/config.js?v=20261009-learning-report-1"></script><script src="js/api.js"></script><script src="js/request.js?v=20261009-learning-report-1"></script>
 </body>
 </html>
