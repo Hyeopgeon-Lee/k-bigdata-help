@@ -95,3 +95,65 @@ test('frontend transmits magic and administrator session tokens only in POST bod
   assert.equal(calls[1].url,'https://example.test/exec');
   assert.equal(new URLSearchParams(calls[1].options.body).get('adminSessionToken'),'session-value');
 });
+
+
+test('learning report has a supported server-side category and online location', () => {
+  const c = vm.createContext({ console });
+  vm.runInContext(source, c);
+  assert.equal(vm.runInContext('CATEGORIES.includes("학습문제 오류 신고")', c), true);
+  assert.equal(vm.runInContext('LOCATIONS.includes("온라인 포털")', c), true);
+});
+
+test('learning report records a ticket and deduplicates identical rapid resubmissions', () => {
+  const rows = [];
+  const sheet = { appendRow: row => rows.push(row), getLastRow: () => rows.length + 1 };
+  const c = vm.createContext({
+    console,
+    LockService: { getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}}) }
+  });
+  vm.runInContext(source, c);
+  c.getSheet_ = () => sheet;
+  c.nextRequestId_ = () => 'REQ-20261009-0001';
+  c.hashPin_ = () => 'hashed';
+  c.sendImmediateRequestNotification_ = () => false;
+  const report = [
+    '문제 유형: 실기문제',
+    '문제 ID: R-IND-JAVA-0006',
+    '문제 코드: R-IND-JAVA-0006',
+    '문제 제목: 배열 출력',
+    '문제 화면: https://portal.k-bigdata.kr/practical.html?id=R-IND-JAVA-0006',
+    '오류 구분: 정답 오류',
+    '신고 내용:',
+    '출력 값이 다릅니다.'
+  ].join('\n');
+  const input = {
+    studentId:'20260001', studentName:'학생', pin:'1234',
+    category:'학습문제 오류 신고', location:'온라인 포털',
+    title:'[실기문제 오류] R-IND-JAVA-0006', content:report
+  };
+  c.readRows_ = () => [];
+  const first = c.createRequest_(input);
+  assert.equal(first.requestId, 'REQ-20261009-0001');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0][5], '학습문제 오류 신고');
+  c.readRows_ = () => [{
+    student_id:'20260001', category:'학습문제 오류 신고', content:report,
+    created_at:new Date(), request_id:first.requestId, status:'RECEIVED', is_deleted:false
+  }];
+  const duplicate = c.createRequest_(input);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.requestId, first.requestId);
+  assert.equal(rows.length, 1);
+  assert.throws(() => c.createRequest_({...input, content:'신고 내용 없음'}), /VALIDATION_ERROR/);
+  assert.throws(() => c.createRequest_({...input, location:'8315호'}), /VALIDATION_ERROR/);
+});
+
+test('learning report Help Desk browser code parses with no syntax errors', () => {
+  for (const path of ['../js/request.js', '../js/admin.js', '../js/config.js']) {
+    assert.doesNotThrow(() => new vm.Script(readFileSync(new URL(path, import.meta.url), 'utf8')));
+  }
+  const config = vm.createContext({ window:{} });
+  vm.runInContext(readFileSync(new URL('../js/config.js', import.meta.url), 'utf8'), config);
+  assert.ok(Array.from(config.window.APP_CONFIG.REQUEST_CATEGORIES).includes('학습문제 오류 신고'));
+  assert.ok(Array.from(config.window.APP_CONFIG.LOCATIONS).includes('온라인 포털'));
+});
