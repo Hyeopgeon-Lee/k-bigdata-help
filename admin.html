@@ -30,12 +30,13 @@
     <div id="admin-workspace" hidden>
     <div id="admin-summary" class="admin-summary"></div>
     <div class="toolbar">
+      <label>신고 구분<select id="request-kind-filter"><option value="ALL">전체 요청</option><option value="practical">실기문제 신고</option><option value="interview">기술면접 신고</option><option value="other">일반 요청</option></select></label>
       <label>상태 필터<select id="status-filter"><option value="ALL">전체</option><option value="RECEIVED">접수</option><option value="CHECKING">확인중</option><option value="PROCESSING">처리중</option><option value="COMPLETED">완료</option></select></label>
       <label class="check-label"><input id="include-deleted" type="checkbox"> 삭제된 요청 포함</label>
     </div>
     <section id="admin-list" class="admin-list" aria-live="polite"></section>
     </div>
   </main>
-  <script src="js/config.js?v=20261008-magic1"></script><script src="js/api.js?v=20261008-magic1"></script><script src="js/admin.js?v=20261008-magic1"></script>
+  <script src="js/config.js?v=20261008-magic1"></script><script src="js/api.js?v=20261008-magic1"></script><script src="js/admin.js?v=20261009-learning-report-1"></script>
 </body>
 </html>
