@@ -12,6 +12,6 @@ window.APP_CONFIG = Object.freeze({
     "학과 운영 건의",
     "기타"
   ],
-  LOCATIONS: ["8311호", "8318호", "8319호", "기타"],
+  LOCATIONS: ["8311호", "8315호", "8316호", "8317호", "8318호", "8319호", "8320호", "기타"],
   LIMITS: Object.freeze({ title: 80, content: 2000 })
 });
