@@ -9,6 +9,24 @@
   <title>BigData Help</title><link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css?v=20261005-portal2">
   <style>
+    /* Portal header typography and navigation, scoped to the Help home. */
+    .site-header{background:rgba(255,255,255,.88);backdrop-filter:blur(16px);font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;line-height:1.6}
+    .header-inner{gap:16px}
+    .brand span{font-size:inherit;font-weight:400;letter-spacing:normal;color:inherit}
+    .brand .brand-copy{line-height:1.25}
+    .brand-copy strong{font-weight:700}
+    .brand-copy small{font-weight:400;letter-spacing:normal}
+    .desktop-nav{gap:18px}
+    .desktop-nav a{position:relative;min-height:0;padding:8px 0;border-radius:0;font-weight:650;line-height:1.6}
+    .desktop-nav a:hover,.desktop-nav a.active{color:var(--navy);background:transparent}
+    .desktop-nav a::after{content:"";position:absolute;right:0;bottom:1px;left:0;height:2px;background:var(--navy);transform:scaleX(0);transition:transform .22s ease}
+    .desktop-nav a:hover::after,.desktop-nav a.active::after{transform:scaleX(1)}
+    .desktop-nav .portal-home{margin-left:0;border:0;background:transparent;color:#3d4961}
+    @media(max-width:759px){
+      .site-header{height:60px}
+      .header-inner{width:calc(100% - 36px)}
+      .brand-mark{width:36px;height:36px;flex-basis:36px;transform:scale(.9)}
+    }
     /* Match the portal's desktop container on this page only. */
     @media (min-width:1024px){
       .header-inner,.page--home{width:min(calc(100% - 40px),1240px)}
