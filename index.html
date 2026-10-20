@@ -8,6 +8,13 @@
   <meta name="description" content="빅데이터소프트웨어공학과 요청·문의 Help Desk">
   <title>BigData Help</title><link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css?v=20261005-portal2">
+  <style>
+    /* Match the portal's desktop container on this page only. */
+    @media (min-width:1024px){
+      .header-inner,.page--home{width:min(calc(100% - 40px),1240px)}
+      .page--home{max-width:none;padding-left:0;padding-right:0}
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -50,3 +57,4 @@
   <script src="js/config.js"></script><script src="js/api.js"></script><script src="js/index.js"></script>
 </body>
 </html>
+
