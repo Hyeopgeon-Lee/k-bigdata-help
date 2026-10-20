@@ -18,18 +18,19 @@
     return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
   }
 
-  // Only the two approved portal learning pages may activate this specialized form.
+  // Accept only approved portal learning pages; validate exact origin, page and question ID.
   function getReportContext() {
     const params = new URLSearchParams(window.location.search);
     const source = params.get("source");
-    const page = source === "practical" ? "practical.html" : source === "interview" ? "interview.html" : "";
+    const approvedPages = {practical: "practical.html", interview: "interview.html", coding: "coding.html"};
+    const page = Object.hasOwn(approvedPages, source) ? approvedPages[source] : "";
     const id = compact(params.get("id"), 80);
     if (!page || !/^[a-zA-Z0-9_-]{1,80}$/.test(id)) return null;
     let problem;
     try { problem = new URL(params.get("url") || ""); } catch (_) { return null; }
     if (problem.origin !== "https://portal.k-bigdata.kr" ||
         problem.pathname !== "/" + page || problem.searchParams.get("id") !== id) return null;
-    const type = source === "practical" ? "실기문제" : "기술면접";
+    const type = source === "practical" ? "실기문제" : source === "interview" ? "기술면접" : "기초 학습문제";
     const code = compact(params.get("code"), 40) || id;
     return {
       source, type, id, code, url: problem.href,
@@ -40,7 +41,8 @@
 
   const reasons = {
     practical: ["문제 오류", "정답 오류", "해설 오류", "값 추적 오류", "코드·SQL 오류", "기타"],
-    interview: ["질문 오류", "모범답안 오류", "핵심 용어 오류", "설명 부족", "기타"]
+    interview: ["질문 오류", "모범답안 오류", "핵심 용어 오류", "설명 부족", "기타"],
+    coding: ["문제 내용 오류", "정답·명령어 오류", "입출력 예제 오류", "해설 오류", "실행 추적·옵션 설명 오류", "기타"]
   };
 
   const report = getReportContext();
