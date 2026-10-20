@@ -22,6 +22,20 @@
     .desktop-nav a::after{content:"";position:absolute;right:0;bottom:1px;left:0;height:2px;background:var(--navy);transform:scaleX(0);transition:transform .22s ease}
     .desktop-nav a:hover::after,.desktop-nav a.active::after{transform:scaleX(1)}
     .desktop-nav .portal-home{margin-left:0;border:0;background:transparent;color:#3d4961}
+    .desktop-nav a.admin-login-link{display:inline-flex;align-items:center;gap:6px;margin-left:6px;padding:8px 12px;border:1px solid #cedced;border-radius:9px;color:var(--navy);background:#fff;white-space:nowrap}
+    .desktop-nav a.admin-login-link::after{display:none}
+    .desktop-nav a.admin-login-link:hover,.desktop-nav a.admin-login-link:focus-visible{color:var(--navy);background:#edf4fb;border-color:#99b6d8}
+    .mobile-header-actions{display:none;align-items:center;gap:6px;flex:0 0 auto}
+    .mobile-admin-login{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:7px 10px;border:1px solid #cedced;border-radius:9px;color:var(--navy);font-size:12px;font-weight:750;white-space:nowrap}
+    .mobile-admin-login:hover,.mobile-admin-login:focus-visible{background:#edf4fb;border-color:#99b6d8}
+    .mobile-header-actions .mobile-portal-link{display:inline-flex;align-items:center;min-height:40px;padding:6px 2px;white-space:nowrap}
+    @media(max-width:759px){
+      .mobile-header-actions{display:flex}
+      .header-inner{gap:8px}
+      .brand{min-width:0;flex:1 1 auto}
+      .brand-copy{min-width:0}
+      .brand-copy strong,.brand-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    }
     @media(max-width:900px){
       .site-header{height:60px}
     }
@@ -38,6 +52,9 @@
       .brand-mark{width:34px;height:34px;flex-basis:34px}
       .brand{gap:9px}
       .brand-copy strong{font-size:12px}
+      .mobile-header-actions{gap:4px}
+      .mobile-admin-login{padding:7px 7px;font-size:11px}
+      .mobile-header-actions .mobile-portal-link{font-size:11px;padding:6px 0}
     }
     /* Match the portal's desktop container on this page only. */
     @media (min-width:1024px){
@@ -58,8 +75,12 @@
         <a href="request.html">요청 등록</a>
         <a href="my.html">내 요청</a>
         <a class="portal-home" href="https://portal.k-bigdata.kr/">통합 포털 ↗</a>
+        <a class="admin-login-link" href="admin.html" aria-label="관리자 로그인"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>관리자 로그인</a>
       </nav>
-      <a class="mobile-portal-link" href="https://portal.k-bigdata.kr/">포털 ↗</a>
+      <div class="mobile-header-actions">
+        <a class="mobile-admin-login" href="admin.html" aria-label="관리자 로그인">관리자</a>
+        <a class="mobile-portal-link" href="https://portal.k-bigdata.kr/">포털 ↗</a>
+      </div>
     </div>
   </header>
   <main class="page page--home">
