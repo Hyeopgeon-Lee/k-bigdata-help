@@ -12,7 +12,7 @@
   const authForm = document.querySelector("#admin-auth");
   const workspace = document.querySelector("#admin-workspace");
   let requests = [];
-  let adminKey = sessionStorage.getItem("bigDataHelpAdminKey") || "";
+  sessionStorage.removeItem("bigDataHelpAdminKey"); // Do not retain legacy shared keys.
   let adminSessionToken = sessionStorage.getItem("bigDataHelpAdminSession") || "";
 
   function escapeHtml(value) {
@@ -110,7 +110,7 @@
       return;
     }
     try {
-      requests = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminKey, adminSessionToken);
+      requests = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminSessionToken);
       renderSummary();
       renderList();
       notice.textContent = "";
@@ -118,7 +118,7 @@
       if (error.message === "ADMIN_UNAUTHORIZED") {
         adminSessionToken = "";
         sessionStorage.removeItem("bigDataHelpAdminSession");
-        notice.textContent = "관리자 인증이 만료되었거나 접근 키가 올바르지 않습니다.";
+        notice.textContent = "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
       } else {
         notice.textContent = "요청 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
       }
@@ -137,7 +137,7 @@
     const button = form.querySelector("button");
     button.disabled = true;
     try {
-      await window.BigDataHelpAPI.update(form.dataset.id, form.status.value, form.adminReply.value.trim(), adminKey, adminSessionToken);
+      await window.BigDataHelpAPI.update(form.dataset.id, form.status.value, form.adminReply.value.trim(), adminSessionToken);
       notice.textContent = "저장되었습니다.";
       await load();
     } catch (error) {
@@ -148,13 +148,34 @@
 
   authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    adminKey = authForm.adminKey.value.trim();
+    const username = authForm.elements.namedItem("adminUsername").value.trim();
+    const passwordInput = authForm.elements.namedItem("adminPassword");
+    const password = passwordInput.value;
+    const submitButton = authForm.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
     adminSessionToken = "";
     sessionStorage.removeItem("bigDataHelpAdminSession");
-    sessionStorage.setItem("bigDataHelpAdminKey", adminKey);
-    authForm.hidden = true;
-    workspace.hidden = false;
-    await load();
+    try {
+      const result = await window.BigDataHelpAPI.adminLogin(username, password);
+      adminSessionToken = result.adminSessionToken || "";
+      if (!adminSessionToken) throw new Error("ADMIN_UNAUTHORIZED");
+      sessionStorage.setItem("bigDataHelpAdminSession", adminSessionToken);
+      authForm.hidden = true;
+      workspace.hidden = false;
+      notice.textContent = "";
+      await load();
+    } catch (error) {
+      authForm.hidden = false;
+      workspace.hidden = true;
+      notice.textContent = error.message === "ADMIN_RATE_LIMITED"
+        ? "로그인 실패 횟수가 초과되었습니다. 15분 후 다시 시도해 주세요."
+        : error.message === "ADMIN_UNAUTHORIZED"
+          ? "아이디 또는 비밀번호가 올바르지 않거나, 서버 인증 설정이 완료되지 않았습니다."
+          : "로그인에 실패했습니다. 다시 시도해 주세요.";
+    } finally {
+      passwordInput.value = "";
+      submitButton.disabled = false;
+    }
   });
 
   async function redeemMagicLink() {
@@ -173,7 +194,6 @@
       if (!adminSessionToken) throw new Error("ADMIN_MAGIC_INVALID");
       sessionStorage.setItem("bigDataHelpAdminSession", adminSessionToken);
       sessionStorage.removeItem("bigDataHelpAdminKey");
-      adminKey = "";
       workspace.hidden = false;
       notice.textContent = "관리자 자동 로그인이 완료되었습니다.";
       await load();
@@ -182,8 +202,8 @@
       adminSessionToken = "";
       sessionStorage.removeItem("bigDataHelpAdminSession");
       notice.textContent = error.message === "ADMIN_MAGIC_EXPIRED" || error.message === "ADMIN_MAGIC_INVALID"
-        ? "메일의 자동 로그인 링크가 만료되었거나 이미 사용되었습니다. 관리자 접근 키로 로그인해주세요."
-        : "자동 로그인에 실패했습니다. 관리자 접근 키로 로그인해주세요.";
+        ? "메일의 자동 로그인 링크가 만료되었거나 이미 사용되었습니다. 아이디와 비밀번호로 로그인해주세요."
+        : "자동 로그인에 실패했습니다. 아이디와 비밀번호로 로그인해주세요.";
       authForm.hidden = false;
       return false;
     }
@@ -191,7 +211,7 @@
 
   (async function init() {
     if (await redeemMagicLink()) return;
-    if (adminSessionToken || adminKey) {
+    if (adminSessionToken) {
       authForm.hidden = true;
       workspace.hidden = false;
       await load();
