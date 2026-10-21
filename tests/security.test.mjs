@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 
 const source = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
 function server() {
@@ -20,6 +21,7 @@ test('GET exposes only public list and never accepts an administrator key', () =
   assert.equal(c.doGet({parameter:{action:'list',adminKey:'test-only-key'}}).success, false);
   assert.equal(c.doGet({parameter:{action:'list',adminSessionToken:'session-token'}}).message, 'METHOD_NOT_ALLOWED');
   assert.equal(c.doGet({parameter:{action:'list',magicToken:'magic-token'}}).message, 'METHOD_NOT_ALLOWED');
+  assert.equal(c.doGet({parameter:{action:'adminLogin',adminUsername:'demo',adminPassword:'wrong'}}).message, 'METHOD_NOT_ALLOWED');
 });
 test('POST uses body only and rejects administrator keys in URL', () => {
   const c = server();
@@ -30,19 +32,26 @@ test('POST uses body only and rejects administrator keys in URL', () => {
   assert.equal(c.doPost({queryString:'action=adminList&adminKey=url-key',postData:form}).message,'KEY_IN_URL_NOT_ALLOWED');
   assert.equal(c.doPost({queryString:'action=adminList&adminSessionToken=url-session',postData:form}).message,'KEY_IN_URL_NOT_ALLOWED');
   assert.equal(c.doPost({queryString:'action=redeemAdminMagic&magicToken=url-magic',postData:form}).message,'KEY_IN_URL_NOT_ALLOWED');
+  assert.equal(c.doPost({queryString:'action=adminLogin&adminPassword=url-password',postData:form}).message,'KEY_IN_URL_NOT_ALLOWED');
+  assert.equal(c.doPost({queryString:'action=adminLogin&adminUsername=url-user',postData:form}).message,'KEY_IN_URL_NOT_ALLOWED');
   assert.equal(c.doPost({parameter:{action:'adminList',adminKey:'query-only'}}).params.adminKey,undefined);
   assert.equal(c.doPost({postData:{type:'application/json',contents:'{"action":"adminList","adminKey":"body-key"}'}}).params.adminKey,'body-key');
   assert.equal(c.doPost({postData:{type:'application/json',contents:'broken'}}).message,'INVALID_JSON');
 });
-test('frontend administrator list transmits credentials in POST body only', async () => {
+test('frontend administrator login exchanges password for a session via POST', async () => {
   const calls = [];
   const context = vm.createContext({window:{APP_CONFIG:{API_URL:'https://example.test/exec'}},URLSearchParams,
     fetch:async (url,options) => {calls.push({url,options});return {ok:true,json:async()=>({success:true,data:{}})};}});
   vm.runInContext(readFileSync(new URL('../js/api.js',import.meta.url),'utf8'),context);
-  await context.window.BigDataHelpAPI.adminList(true,'test-only-key');
+  await context.window.BigDataHelpAPI.adminLogin('demo-admin','test-only-password');
+  await context.window.BigDataHelpAPI.adminList(true,'session-token');
   assert.equal(calls[0].url,'https://example.test/exec');
   assert.equal(calls[0].options.method,'POST');
-  assert.equal(new URLSearchParams(calls[0].options.body).get('adminKey'),'test-only-key');
+  assert.equal(new URLSearchParams(calls[0].options.body).get('adminPassword'),'test-only-password');
+  assert.equal(new URLSearchParams(calls[0].options.body).get('adminUsername'),'demo-admin');
+  assert.equal(new URLSearchParams(calls[1].options.body).get('adminSessionToken'),'session-token');
+  assert.equal(new URLSearchParams(calls[1].options.body).has('adminPassword'), false);
+  assert.equal(new URLSearchParams(calls[1].options.body).has('adminKey'), false);
 });
 
 
@@ -89,7 +98,7 @@ test('frontend transmits magic and administrator session tokens only in POST bod
   });
   vm.runInContext(readFileSync(new URL('../js/api.js',import.meta.url),'utf8'),context);
   await context.window.BigDataHelpAPI.redeemAdminMagic('magic-value');
-  await context.window.BigDataHelpAPI.adminList(false,'','session-value');
+  await context.window.BigDataHelpAPI.adminList(false,'session-value');
   assert.equal(calls[0].url,'https://example.test/exec');
   assert.equal(new URLSearchParams(calls[0].options.body).get('magicToken'),'magic-value');
   assert.equal(calls[1].url,'https://example.test/exec');
@@ -156,4 +165,73 @@ test('learning report Help Desk browser code parses with no syntax errors', () =
   vm.runInContext(readFileSync(new URL('../js/config.js', import.meta.url), 'utf8'), config);
   assert.ok(Array.from(config.window.APP_CONFIG.REQUEST_CATEGORIES).includes('학습문제 오류 신고'));
   assert.ok(Array.from(config.window.APP_CONFIG.LOCATIONS).includes('온라인 포털'));
+});
+
+test('administrator password bootstrap migrates to salted server-only digest and issues sessions', () => {
+  const properties = new Map([['ADMIN_LOGIN_PASSWORD','test-only-password']]);
+  const cache = new Map();
+  let counter = 0;
+  const context = vm.createContext({
+    console,
+    LockService: { getScriptLock: () => ({waitLock: () => {},releaseLock: () => {}}) },
+    CacheService: { getScriptCache: () => ({
+      get: key => cache.get(key) ?? null,
+      put: (key,value) => cache.set(key,String(value)),
+      remove: key => cache.delete(key)
+    })},
+    PropertiesService: {getScriptProperties: () => ({
+      getProperty: key => properties.get(key) ?? null,
+      setProperties: values => Object.entries(values).forEach(([key,value])=>properties.set(key,String(value))),
+      deleteProperty: key => properties.delete(key)
+    })},
+    Utilities: {
+      getUuid: () => String(++counter).padStart(32,'a'),
+      DigestAlgorithm: {SHA_256:'SHA256'},
+      Charset: {UTF_8:'UTF8'},
+      computeDigest: (_algorithm,data) => Array.from(createHash('sha256').update(data).digest()).map(x=>x>127?x-256:x)
+    }
+  });
+  vm.runInContext(source,context);
+  assert.throws(() => context.adminLogin_({adminUsername:'nope',adminPassword:'test-only-password'}),/ADMIN_UNAUTHORIZED/);
+  assert.throws(() => context.adminLogin_({adminUsername:'poly',adminPassword:'wrong'}),/ADMIN_UNAUTHORIZED/);
+  const loggedIn = context.adminLogin_({adminUsername:'poly',adminPassword:'test-only-password'});
+  assert.equal(context.isAdminSessionValid_(loggedIn.adminSessionToken),true);
+  assert.equal(properties.has('ADMIN_LOGIN_PASSWORD'),false,'bootstrap password removed');
+  assert.equal(properties.get('ADMIN_PASSWORD_HASH').length,64,'digest stored');
+  assert.notEqual(properties.get('ADMIN_PASSWORD_HASH'),'test-only-password');
+  assert.ok(properties.get('ADMIN_PASSWORD_SALT'));
+  assert.ok(properties.get('ADMIN_PASSWORD_PEPPER'));
+  assert.doesNotThrow(() => context.assertAdmin_({adminSessionToken:loggedIn.adminSessionToken}));
+  assert.throws(() => context.assertAdmin_({adminKey:'legacy-only'}),/ADMIN_UNAUTHORIZED/);
+  assert.throws(() => context.adminLogin_({adminUsername:'poly',adminPassword:'wrong'}),/ADMIN_UNAUTHORIZED/);
+  const second = context.adminLogin_({adminUsername:'poly',adminPassword:'test-only-password'});
+  assert.ok(second.adminSessionToken);
+  context.adminLogout_({adminSessionToken:second.adminSessionToken});
+  assert.equal(context.isAdminSessionValid_(second.adminSessionToken),false);
+});
+
+test('administrator password brute-force protection blocks repeated failures', () => {
+  const cache=new Map();
+  const context=vm.createContext({
+    console,
+    LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},
+    CacheService:{getScriptCache:()=>({
+      get:key=>cache.get(key)??null,
+      put:(key,value)=>cache.set(key,String(value)),
+      remove:key=>cache.delete(key)
+    })},
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='ADMIN_LOGIN_PASSWORD'?'test-only-password':null})}
+  });
+  vm.runInContext(source,context);
+  for(let i=0;i<5;i++)assert.throws(()=>context.adminLogin_({adminUsername:'poly',adminPassword:'wrong'}),/ADMIN_UNAUTHORIZED/);
+  assert.throws(()=>context.adminLogin_({adminUsername:'poly',adminPassword:'test-only-password'}),/ADMIN_RATE_LIMITED/);
+});
+
+test('public admin page contains separate account fields and never a hard-coded password', () => {
+  const html=readFileSync(new URL('../admin.html',import.meta.url),'utf8');
+  const browser=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
+  assert.match(html,/name="adminUsername"/);
+  assert.match(html,/name="adminPassword"/);
+  assert.doesNotMatch(browser,/sessionStorage\.setItem\("bigDataHelpAdminKey"/);
+  assert.doesNotMatch(html,/name="adminKey"/);
 });
