@@ -39,10 +39,10 @@
 - 요청 등록: 유형/장소/제목/내용/이름/학번/PIN 검증, 중복 클릭 방지
 - 내 요청: 학번과 4자리 PIN이 모두 일치하는 활성 요청을 최신순 표시
 - 학생 삭제: 행을 지우지 않고 `is_deleted=TRUE`, `deleted_at` 기록
-- 관리자: 접근 키 확인 후 전체 요청, 상태 필터, 삭제 요청 포함 보기, 상태/답변 수정
+- 관리자: 아이디·비밀번호 로그인으로 서버 세션 발급 후 전체 요청, 상태 필터, 삭제 요청 포함 보기, 상태/답변 수정
 - 즉시 메일: 요청 등록 직후 `hglee67@kopo.ac.kr`로 요청 제목·유형·장소·요청자·학번·상세 내용·요청번호를 HTML 메일로 발송
 - 관리자 자동 로그인: 메일의 버튼은 30분 유효·1회용 링크이며 관리자 화면에서 자동 인증 후 요청 목록을 표시
-- 보안: 기존 `ADMIN_ACCESS_KEY`는 URL에 넣지 않고, 메일 링크의 일회용 토큰도 URL query가 아니라 fragment(`#magic=`)로 전달한 뒤 POST body에서 교환
+- 보안: 비밀번호는 POST body로만 전달하며 브라우저에 저장하지 않습니다. 관리자 세션은 브라우저 sessionStorage에 보관합니다. 메일 링크의 일회용 토큰은 URL fragment(`#magic=`)로 전달한 뒤 POST body에서 교환합니다.
 - 즉시 메일 성공 후에만 해당 티켓을 `CHECKING`으로 변경하고 `updated_at`, `email_sent_at` 기록
 - 오전 8시 메일: 즉시 메일 실패 등으로 `RECEIVED`이면서 `email_sent_at`이 비어 있는 요청만 재알림
 - PIN: 평문이 아니라 SHA-256 해시 문자열로 저장되며 공개/관리자 API, 메일, 로그에 포함하지 않음
@@ -70,9 +70,9 @@ email_sent_at
 
 필수 Script Properties:
 - `SPREADSHEET_ID`: 운영 Google Sheet ID
-- `ADMIN_ACCESS_KEY`: 길고 추측하기 어려운 관리자 접근 키
+- `ADMIN_LOGIN_PASSWORD`: 초기 로그인 시에만 사용하는 관리자 비밀번호(서버 내부 속성, 최초 로그인 후 해시로 자동 이전)
 
-`ADMIN_EMAIL`, `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 코드의 비밀정보가 아닌 운영 설정으로 유지합니다. 관리자 키는 브라우저 `sessionStorage`에만 보관하며 URL query string으로 받지 않습니다. 이 키는 최소한의 접근 제한이며 완전한 계정 인증을 대신하지 않습니다.
+`ADMIN_EMAIL`, `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 코드의 비밀정보가 아닌 운영 설정으로 유지합니다. 관리자 아이디는 `Code.gs`의 `ADMIN_LOGIN_USERNAME`(현재 `poly`)으로 지정됩니다. 새 관리자 로그인은 POST로 비밀번호를 검증하고 일시적인 세션만 브라우저에 저장합니다. 로그인 5회 실패 시 15분 동안 차단됩니다. 운영 설정은 [Apps Script 설치 안내](apps-script/README.md)를 참고하세요.
 
 Web App 배포는 다음 값을 사용합니다.
 
@@ -100,8 +100,10 @@ GitHub의 `apps-script/`를 Apps Script 원본 소스로 사용하며, GAS 관�
 | `create` | POST | 새 요청 생성 (`RECEIVED`) | PIN 해시 저장 |
 | `myRequests` | POST | 학번+PIN 본인 요청 조회 | 일치 티켓만 반환 |
 | `delete` | POST | 학번+PIN+요청번호로 Soft Delete | 행 유지 |
-| `adminList` | POST | 관리자 전체 요청 | 본문의 관리자 키 필요, PIN 제외 |
-| `update` | POST | 상태와 관리자 답변 수정 | 관리자 키 필요 |
+| `adminLogin` | POST | 아이디·비밀번호 인증 후 일시적인 세션 발급 | 비밀번호는 POST body만 사용 |
+| `adminLogout` | POST | 관리자 세션 무효화 | 세션 토큰만 전송 |
+| `adminList` | POST | 관리자 전체 요청 | 관리자 세션 토큰 필요, PIN 제외 |
+| `update` | POST | 상태와 관리자 답변 수정 | 관리자 세션 토큰 필요 |
 
 프론트엔드는 CORS 사전 요청 문제를 줄이기 위해 POST를 `application/x-www-form-urlencoded`로 전송합니다. Apps Script는 JSON POST도 처리할 수 있습니다.
 
@@ -109,7 +111,7 @@ GitHub의 `apps-script/`를 Apps Script 원본 소스로 사용하며, GAS 관�
 
 학생이 새 요청을 등록하면 Apps Script가 즉시 `hglee67@kopo.ac.kr`로 HTML 메일을 발송합니다. 메일에는 요청 제목, 요청 유형, 장소, 요청자 이름, 학번, 상세 내용, 등록 시각, 요청번호가 포함됩니다.
 
-메일의 **관리자 화면에서 확인하기** 버튼은 `admin.html#magic=...` 형식의 일회용 링크입니다. 링크 토큰은 Apps Script Cache에 30분 동안만 보관되며 한 번 사용하면 즉시 폐기됩니다. 관리자 화면은 토큰을 URL에서 지운 뒤 POST body로 교환하여 최대 6시간 유효한 임시 관리자 세션을 발급받습니다. 기존 `ADMIN_ACCESS_KEY`는 URL이나 메일에 노출하지 않으며, 자동 로그인 링크가 만료되었을 때만 기존 관리자 접근 키 로그인 화면을 사용합니다.
+메일의 **관리자 화면에서 확인하기** 버튼은 `admin.html#magic=...` 형식의 일회용 링크입니다. 링크 토큰은 Apps Script Cache에 30분 동안만 보관되며 한 번 사용하면 즉시 폐기됩니다. 관리자 화면은 토큰을 URL에서 지운 뒤 POST body로 교환하여 최대 6시간 유효한 임시 관리자 세션을 발급받습니다. 관리자는 자동 로그인 링크 없이도 아이디·비밀번호로 접속할 수 있습니다. 기존 공유 접근 키 로그인은 사용하지 않습니다.
 
 즉시 메일 발송이 성공한 경우에만 해당 요청의 상태를 `CHECKING`으로 바꾸고 `updated_at`, `email_sent_at`을 기록합니다. 즉시 메일이 실패하면 요청 등록 자체는 유지하고 상태를 `RECEIVED`로 남겨 둡니다.
 
@@ -155,7 +157,7 @@ Apps Script 프로젝트 설정의 시간대를 `Asia/Seoul`로 지정하고 `cr
 - 공개 API에는 학생 이름, 학번, PIN을 반환하지 않습니다.
 - 관리자 API에도 PIN 해시는 반환하지 않으며 이메일에도 PIN을 넣지 않습니다.
 - 4자리 PIN은 편의를 위한 조회 수단이며 강한 본인 인증이 아닙니다. 민감한 개인정보나 비밀번호를 상세 내용에 작성하지 않도록 안내하세요.
-- Apps Script Web App은 학생 접근을 위해 공개되므로 관리자 접근 키를 길고 무작위로 설정하고 주기적으로 교체하세요.
+- Apps Script Web App은 학생 접근을 위해 공개되므로 비공개 Script Property에 관리자 비밀번호를 등록해야 합니다. 처음 로그인하면 salted·peppered 해시로 이전됩니다. 특히 4자리 숫자 비밀번호는 추측하기 쉬우므로 긴 비밀번호를 사용하세요.
 - 실제 학생 개인정보를 README, 커밋, 이슈에 넣지 마세요.
 
 ## 향후 확장 후보
