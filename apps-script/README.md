@@ -22,9 +22,20 @@ Apps Script **프로젝트 설정 → 스크립트 속성**에서 다음 값을 
 | 키 | 값 |
 |---|---|
 | `SPREADSHEET_ID` | 복사한 Google Sheet ID |
-| `ADMIN_ACCESS_KEY` | 길고 추측하기 어려운 무작위 문자열 |
+| `ADMIN_LOGIN_PASSWORD` | **최초 1회** 서버에만 등록할 관리자 비밀번호 |
 
-실제 ID와 관리자 키는 저장소에 커밋하지 않습니다. 관리자 이메일은 `Code.gs`의 `ADMIN_EMAIL`에서 관리하고, `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 기본값을 유지해도 됩니다.
+관리자 아이디는 `Code.gs`의 `ADMIN_LOGIN_USERNAME`에서 설정하며 현재 `poly`입니다. 기존 `ADMIN_ACCESS_KEY`는 더 이상 관리자의 로그인 수단이 아닙니다.
+
+**비밀번호 활성화 절차**
+
+1. 운영 Apps Script 프로젝트의 **프로젝트 설정 → 스크립트 속성**에 `ADMIN_LOGIN_PASSWORD` 항목을 만들고, 원하는 비밀번호를 입력합니다. GitHub 소스나 `js/config.js`에는 입력하지 않습니다.
+2. 새 백엔드 버전을 배포한 뒤 `https://help.k-bigdata.kr/admin.html`에서 아이디와 비밀번호로 **처음 한 번** 로그인합니다.
+3. 서버는 성공한 첫 로그인에서 무작위 salt·pepper를 생성하고 `ADMIN_PASSWORD_HASH`를 저장한 뒤, 일회용 `ADMIN_LOGIN_PASSWORD` 속성을 자동으로 삭제합니다. 이후에는 비밀번호의 평문 없이 인증합니다.
+4. 비밀번호를 다시 변경할 때는 서버 비공개 속성의 `ADMIN_PASSWORD_HASH`, `ADMIN_PASSWORD_SALT`, `ADMIN_PASSWORD_PEPPER`를 삭제하고 새 `ADMIN_LOGIN_PASSWORD`를 등록한 후 로그인합니다. 이미 발급된 세션은 만료되거나 로그아웃할 때까지 살아 있을 수 있습니다.
+
+로그인 실패가 5회 누적되면 15분 동안 추가 시도를 차단합니다. **4자리 숫자 비밀번호는 추측하기 쉬우므로, 개인정보가 있는 관리자 계정에는 훨씬 긴 고유 비밀번호를 권장합니다.** 학생용 등록·조회 기능에는 영향을 주지 않습니다.
+
+실제 인증 비밀값은 저장소에 커밋하지 않습니다. 관리자 이메일은 `Code.gs`의 `ADMIN_EMAIL`에서 관리하고, `SHEET_NAME`, `TIMEZONE`, `SERVICE_NAME`, `SERVICE_URL`은 기본값을 유지해도 됩니다.
 
 ## 4. 시트 초기화
 
@@ -100,6 +111,6 @@ https://script.google.com/macros/s/배포_ID/exec?action=list
 - 공개 홈에 이름/학번/PIN이 보이지 않는지
 - 잘못된 학번/PIN으로 내 요청이 조회되지 않는지
 - 삭제 티켓이 홈/내 요청/메일 대상에서 제외되는지
-- 관리자 접근 키 없이는 관리자 API가 거부되는지
+- 유효한 관리자 세션 없이 관리자 API가 거부되는지
 - 관리자 목록/메일 어디에도 PIN 또는 PIN 해시가 노출되지 않는지
 - 모바일 브라우저에서 등록, 조회, 삭제, 관리자 저장이 동작하는지
