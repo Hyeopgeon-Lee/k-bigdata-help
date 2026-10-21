@@ -8,7 +8,10 @@ const CONFIG = Object.freeze({
   MAX_TITLE_LENGTH: 80,
   MAX_CONTENT_LENGTH: 2000,
   ADMIN_MAGIC_TTL_SECONDS: 1800,
-  ADMIN_SESSION_TTL_SECONDS: 21600
+  ADMIN_SESSION_TTL_SECONDS: 21600,
+  ADMIN_LOGIN_USERNAME: "poly",
+  ADMIN_LOGIN_MAX_FAILURES: 5,
+  ADMIN_LOGIN_FAILURE_WINDOW_SECONDS: 900
 });
 
 const HEADERS = Object.freeze([
@@ -29,14 +32,14 @@ function scriptProperty_(key) {
 
 function doGet(e) {
   const params = e && e.parameter ? e.parameter : {};
-  if (params.adminKey || params.adminSessionToken || params.magicToken || clean_(params.action) !== "list") {
+  if (params.adminKey || params.adminSessionToken || params.magicToken || params.adminUsername || params.adminPassword || clean_(params.action) !== "list") {
     return json_(false, null, "METHOD_NOT_ALLOWED");
   }
   return routeRequest_(params);
 }
 
 function doPost(e) {
-  if (e && /(?:^|&)(?:adminKey|adminSessionToken|magicToken)(?:=|&|$)/i.test(String(e.queryString || ""))) {
+  if (e && /(?:^|&)(?:adminKey|adminSessionToken|magicToken|adminUsername|adminPassword)(?:=|&|$)/i.test(String(e.queryString || ""))) {
     return json_(false, null, "KEY_IN_URL_NOT_ALLOWED");
   }
   let params = {};
@@ -66,6 +69,8 @@ function routeRequest_(params) {
       case "myRequests": data = getMyRequests_(params); break;
       case "delete": data = deleteRequest_(params); break;
       case "redeemAdminMagic": data = redeemAdminMagic_(params); break;
+      case "adminLogin": data = adminLogin_(params); break;
+      case "adminLogout": data = adminLogout_(params); break;
       case "adminList": assertAdmin_(params); data = listAdmin_(params); break;
       case "update": assertAdmin_(params); data = updateRequest_(params); break;
       default: return json_(false, null, "UNKNOWN_ACTION");
@@ -241,6 +246,68 @@ function redeemAdminMagic_(params) {
     expiresInSeconds: CONFIG.ADMIN_SESSION_TTL_SECONDS,
     requestId: requestId
   };
+}
+
+/**
+ * The first successful password login converts the one-time private Script
+ * Property ADMIN_LOGIN_PASSWORD to a salted+peppered digest. Neither the
+ * password nor its digest is embedded in public GitHub Pages source.
+ */
+function adminPasswordDigest_(password, salt, pepper) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, salt + ":" + password + ":" + pepper, Utilities.Charset.UTF_8
+  );
+  return bytes.map(byte => (byte + 256) % 256).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function adminLogin_(params) {
+  const username = clean_(params.adminUsername);
+  const password = String(params.adminPassword == null ? "" : params.adminPassword);
+  const cache = CacheService.getScriptCache();
+  const failuresKey = "ADMIN_LOGIN_FAILURES";
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const failures = Number(cache.get(failuresKey) || "0");
+    if (failures >= CONFIG.ADMIN_LOGIN_MAX_FAILURES) throw new Error("ADMIN_RATE_LIMITED");
+
+    const props = PropertiesService.getScriptProperties();
+    const setupPassword = String(props.getProperty("ADMIN_LOGIN_PASSWORD") || "");
+    const storedHash = String(props.getProperty("ADMIN_PASSWORD_HASH") || "");
+    const salt = String(props.getProperty("ADMIN_PASSWORD_SALT") || "");
+    const pepper = String(props.getProperty("ADMIN_PASSWORD_PEPPER") || "");
+    const validUsername = secureEqual_(username, CONFIG.ADMIN_LOGIN_USERNAME);
+    const validStoredHash = Boolean(storedHash && salt && pepper &&
+      secureEqual_(adminPasswordDigest_(password, salt, pepper), storedHash));
+    const validBootstrap = Boolean(!storedHash && setupPassword && secureEqual_(password, setupPassword));
+    if (!validUsername || (!validStoredHash && !validBootstrap)) {
+      cache.put(failuresKey, String(failures + 1), CONFIG.ADMIN_LOGIN_FAILURE_WINDOW_SECONDS);
+      throw new Error("ADMIN_UNAUTHORIZED");
+    }
+
+    if (validBootstrap) {
+      const newSalt = randomToken_();
+      const newPepper = randomToken_();
+      props.setProperties({
+        ADMIN_PASSWORD_SALT: newSalt,
+        ADMIN_PASSWORD_PEPPER: newPepper,
+        ADMIN_PASSWORD_HASH: adminPasswordDigest_(password, newSalt, newPepper)
+      });
+      props.deleteProperty("ADMIN_LOGIN_PASSWORD");
+    }
+    cache.remove(failuresKey);
+    const sessionToken = randomToken_();
+    cache.put("ADMIN_SESSION_" + sessionToken, "1", CONFIG.ADMIN_SESSION_TTL_SECONDS);
+    return { adminSessionToken: sessionToken, expiresInSeconds: CONFIG.ADMIN_SESSION_TTL_SECONDS };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminLogout_(params) {
+  const token = clean_(params.adminSessionToken);
+  if (isAdminSessionValid_(token)) CacheService.getScriptCache().remove("ADMIN_SESSION_" + token);
+  return { loggedOut: true };
 }
 
 function isAdminSessionValid_(token) {
@@ -436,15 +503,10 @@ function studentView_(row) {
     title: row.title, content: row.content, status: row.status, adminReply: row.admin_reply || "", updatedAt: iso_(row.updated_at) };
 }
 function assertAdmin_(params) {
-  if (isAdminSessionValid_(params.adminSessionToken)) return;
-  const accessKey = scriptProperty_("ADMIN_ACCESS_KEY");
-  if (!accessKey || !secureEqual_(clean_(params.adminKey), accessKey)) {
-    throw new Error("ADMIN_UNAUTHORIZED");
-  }
+  if (!isAdminSessionValid_(params.adminSessionToken)) throw new Error("ADMIN_UNAUTHORIZED");
 }
 function validateConfiguration_(requireEmail) {
   if (!scriptProperty_("SPREADSHEET_ID")) throw new Error("SPREADSHEET_ID_NOT_CONFIGURED");
-  if (!scriptProperty_("ADMIN_ACCESS_KEY")) throw new Error("ADMIN_UNAUTHORIZED");
   if (requireEmail && (!CONFIG.ADMIN_EMAIL || CONFIG.ADMIN_EMAIL === "YOUR_ADMIN_EMAIL")) throw new Error("ADMIN_EMAIL_NOT_CONFIGURED");
 }
 function hashPin_(requestId, pin) {
@@ -467,7 +529,7 @@ function iso_(value) { if (!value) return ""; const date = value instanceof Date
 function formatDateTime_(value) { const date = value instanceof Date ? value : new Date(value); return Utilities.formatDate(date, CONFIG.TIMEZONE, "yyyy.MM.dd HH:mm"); }
 function escapeHtml_(value) { return String(value == null ? "" : value).replace(/[&<>\"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]); }
 function safeErrorMessage_(error) {
-  const allowed = ["VALIDATION_ERROR", "NOT_FOUND_OR_UNAUTHORIZED", "REQUEST_NOT_FOUND", "ADMIN_UNAUTHORIZED", "ADMIN_MAGIC_INVALID", "ADMIN_MAGIC_EXPIRED", "SPREADSHEET_ID_NOT_CONFIGURED", "ADMIN_EMAIL_NOT_CONFIGURED", "SHEET_NOT_FOUND", "INVALID_SHEET_HEADERS"];
+  const allowed = ["VALIDATION_ERROR", "NOT_FOUND_OR_UNAUTHORIZED", "REQUEST_NOT_FOUND", "ADMIN_UNAUTHORIZED", "ADMIN_RATE_LIMITED", "ADMIN_MAGIC_INVALID", "ADMIN_MAGIC_EXPIRED", "SPREADSHEET_ID_NOT_CONFIGURED", "ADMIN_EMAIL_NOT_CONFIGURED", "SHEET_NOT_FOUND", "INVALID_SHEET_HEADERS"];
   const message = error && error.message ? error.message : "SERVER_ERROR";
   return allowed.indexOf(message) > -1 ? message : "SERVER_ERROR";
 }
