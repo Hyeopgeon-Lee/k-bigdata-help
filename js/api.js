@@ -45,9 +45,13 @@
       request("delete", { requestId, studentId, pin }, "POST"),
     redeemAdminMagic: (magicToken) =>
       request("redeemAdminMagic", { magicToken }, "POST"),
-    adminList: (includeDeleted = false, adminKey = "", adminSessionToken = "") =>
-      request("adminList", { includeDeleted: String(includeDeleted), adminKey, adminSessionToken }, "POST"),
-    update: (requestId, status, adminReply, adminKey = "", adminSessionToken = "") =>
-      request("update", { requestId, status, adminReply, adminKey, adminSessionToken }, "POST")
+    adminLogin: (adminUsername, adminPassword) =>
+      request("adminLogin", { adminUsername, adminPassword }, "POST"),
+    adminLogout: (adminSessionToken) =>
+      request("adminLogout", { adminSessionToken }, "POST"),
+    adminList: (includeDeleted = false, adminSessionToken = "") =>
+      request("adminList", { includeDeleted: String(includeDeleted), adminSessionToken }, "POST"),
+    update: (requestId, status, adminReply, adminSessionToken = "") =>
+      request("update", { requestId, status, adminReply, adminSessionToken }, "POST")
   });
 })();
