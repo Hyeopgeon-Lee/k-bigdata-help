@@ -235,3 +235,30 @@ test('public admin page contains separate account fields and never a hard-coded 
   assert.doesNotMatch(browser,/sessionStorage\.setItem\("bigDataHelpAdminKey"/);
   assert.doesNotMatch(html,/name="adminKey"/);
 });
+
+test('public request list supports safe pagination and never exposes private fields', () => {
+  const c = server();
+  c.readRows_ = () => Array.from({length: 45}, (_, index) => ({
+    request_id: 'REQ-' + String(index + 1).padStart(4, '0'),
+    created_at: new Date(Date.UTC(2026, 9, 21, 0, index)),
+    status: index % 2 ? 'COMPLETED' : 'CHECKING',
+    is_deleted: index === 20,
+    student_id: 'private-id', student_name: 'private-name', pin: 'private-pin',
+    category: '기타', location: '기타', title: '요청 ' + index
+  }));
+  const first = c.listPublic_({});
+  assert.equal(first.pageSize, 10);
+  assert.equal(first.requests.length, 10);
+  assert.equal(first.total, 44);
+  assert.equal(first.totalPages, 5);
+  const second = c.listPublic_({page: 2, pageSize: 20});
+  assert.equal(second.page, 2);
+  assert.equal(second.requests.length, 20);
+  assert.equal(second.totalPages, 3);
+  assert.equal(JSON.stringify(second.requests).includes('private-id'), false);
+  assert.equal(second.requests.every(item => !Object.hasOwn(item, 'studentName')), true);
+  const last = c.listPublic_({page: 999, pageSize: 200, status: 'COMPLETED'});
+  assert.equal(last.pageSize, 20);
+  assert.equal(last.page, last.totalPages);
+  assert.equal(last.requests.every(item => item.status === 'COMPLETED'), true);
+});
