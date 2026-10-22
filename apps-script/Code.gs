@@ -64,7 +64,7 @@ function routeRequest_(params) {
     const action = clean_(params.action);
     let data;
     switch (action) {
-      case "list": data = listPublic_(); break;
+      case "list": data = listPublic_(params); break;
       case "create": data = createRequest_(params); break;
       case "myRequests": data = getMyRequests_(params); break;
       case "delete": data = deleteRequest_(params); break;
@@ -154,18 +154,30 @@ function createRequest_(params) {
   return { requestId: created.requestId, status: status, createdAt: created.createdAt.toISOString() };
 }
 
-function listPublic_() {
+function listPublic_(params) {
   const rows = readRows_().filter(row => !isTrue_(row.is_deleted));
   const counts = { RECEIVED: 0, CHECKING: 0, PROCESSING: 0, COMPLETED: 0 };
   rows.forEach(row => { if (Object.prototype.hasOwnProperty.call(counts, row.status)) counts[row.status]++; });
-  rows.sort((a, b) => dateValue_(b.created_at) - dateValue_(a.created_at));
-  return {
-    counts: counts,
-    requests: rows.slice(0, 10).map(row => ({
-      requestId: row.request_id, category: row.category, location: row.location, title: row.title,
-      status: row.status, createdAt: iso_(row.created_at)
-    }))
-  };
+
+  // The default remains the latest ten public requests for older clients.
+  const pageSize = Math.min(20, Math.max(1, parseInt(params && params.pageSize, 10) || 10));
+  const requestedPage = Math.max(1, parseInt(params && params.page, 10) || 1);
+  const status = clean_(params && params.status);
+  const sort = clean_(params && params.sort) === "oldest" ? "oldest" : "newest";
+  const filtered = STATUSES.indexOf(status) !== -1 ? rows.filter(row => row.status === status) : rows;
+  filtered.sort((a, b) => {
+    const byDate = dateValue_(b.created_at) - dateValue_(a.created_at);
+    const byId = String(b.request_id).localeCompare(String(a.request_id));
+    return (sort === "oldest" ? -1 : 1) * (byDate || byId);
+  });
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const requests = filtered.slice((page - 1) * pageSize, page * pageSize).map(row => ({
+    requestId: row.request_id, category: row.category, location: row.location, title: row.title,
+    status: row.status, createdAt: iso_(row.created_at)
+  }));
+  return { counts, requests, total, totalPages, page, pageSize };
 }
 
 function getMyRequests_(params) {
