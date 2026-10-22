@@ -37,6 +37,9 @@
         page: String(page), pageSize: "20", status: status.value, sort: sort.value
       });
       if (sequence !== latestLoad) return;
+      if (!Number.isFinite(Number(data.total)) || !Number.isFinite(Number(data.page))) {
+        throw new Error("PAGINATION_API_NOT_READY");
+      }
       page = data.page || 1;
       const total = Number(data.total || 0);
       const totalPages = Number(data.totalPages || 1);
@@ -58,13 +61,14 @@
         <span aria-live="polite">${page} / ${totalPages} 페이지</span>
         <button type="button" data-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>다음</button>` : "";
       notice.hidden = true;
-    } catch (_) {
+    } catch (error) {
       if (sequence !== latestLoad) return;
-      count.textContent = "조회 실패";
+      const needsDeployment = error.message === "PAGINATION_API_NOT_READY";
+      count.textContent = needsDeployment ? "전체 요청 조회 기능 준비 중" : "조회 실패";
       list.innerHTML = '<div class="empty-state">요청 목록을 불러오지 못했습니다.</div>';
       pager.innerHTML = "";
       notice.hidden = false;
-      notice.textContent = "잠시 후 다시 시도해 주세요.";
+      notice.textContent = needsDeployment ? "전체 요청 조회 API가 아직 운영 서버에 반영되지 않았습니다." : "잠시 후 다시 시도해 주세요.";
     }
   }
 
