@@ -278,3 +278,27 @@ body{background:var(--bg);color:var(--ink)}
 .admin-auth{max-width:none}
 @media(max-width:767px){.page,.admin-page .page{width:calc(100% - 36px)}}
 @media(max-width:389px){.page,.admin-page .page{width:calc(100% - 32px)}}
+
+
+/* Request listing and administrator filtering (2026-10-22) */
+.page--all-requests{max-width:1120px}
+.list-all-link,.results-heading a{color:var(--navy);font-size:14px;font-weight:750;text-decoration:none}
+.list-all-link:hover,.results-heading a:hover{text-decoration:underline;text-underline-offset:3px}
+.list-privacy-note{margin:0 2px 14px;font-size:12px;color:var(--muted)}
+.public-filters{display:flex;flex-wrap:wrap;gap:14px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:16px}
+.public-filters label{display:grid;gap:6px;min-width:190px;flex:1;font-weight:700;font-size:13px}
+.public-filters select,.toolbar--filters select,.toolbar--filters input{min-width:0;width:100%;height:46px;padding:10px 12px;border:1px solid #cbd4df;border-radius:9px;background:#fff;color:var(--ink);font:inherit;font-size:14px}
+.public-filters select:focus-visible,.toolbar--filters select:focus-visible,.toolbar--filters input:focus-visible{outline:3px solid rgba(52,104,232,.18);border-color:var(--navy)}
+.toolbar.toolbar--filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;justify-content:stretch;gap:14px}
+.toolbar--filters label{min-width:0;display:grid;gap:6px;font-size:13px}
+.results-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:16px 2px 14px}
+.results-heading strong{color:var(--ink);font-size:14px}
+.results-heading span{color:var(--muted);font-size:12px}
+.pagination{display:flex;align-items:center;justify-content:center;gap:16px;margin:22px 0 8px}
+.pagination button{min-width:78px;min-height:42px;padding:8px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);font:inherit;font-size:13px;font-weight:750;cursor:pointer}
+.pagination button:hover:not(:disabled){border-color:var(--navy);background:#f1f5fb}
+.pagination button:disabled{opacity:.42;cursor:not-allowed}
+.pagination span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media(min-width:900px){.page--all-requests .ticket-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.toolbar.toolbar--filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.toolbar.toolbar--filters{grid-template-columns:1fr}.public-filters{flex-direction:column}.public-filters label{min-width:0}.results-heading span{flex-basis:100%}}
