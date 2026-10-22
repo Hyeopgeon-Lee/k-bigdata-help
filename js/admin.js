@@ -8,10 +8,18 @@
   const notice = document.querySelector("#admin-notice");
   const filter = document.querySelector("#status-filter");
   const kindFilter = document.querySelector("#request-kind-filter");
-  const includeDeleted = document.querySelector("#include-deleted");
+  const deletedFilter = document.querySelector("#deleted-filter");
+  const searchInput = document.querySelector("#request-search");
+  const dateFrom = document.querySelector("#date-from");
+  const dateTo = document.querySelector("#date-to");
+  const sortOrder = document.querySelector("#sort-order");
+  const pageSizeInput = document.querySelector("#page-size");
+  const resultCount = document.querySelector("#admin-result-count");
+  const pager = document.querySelector("#admin-pagination");
   const authForm = document.querySelector("#admin-auth");
   const workspace = document.querySelector("#admin-workspace");
   let requests = [];
+  let currentPage = 1;
   sessionStorage.removeItem("bigDataHelpAdminKey"); // Do not retain legacy shared keys.
   let adminSessionToken = sessionStorage.getItem("bigDataHelpAdminSession") || "";
 
@@ -29,25 +37,26 @@
     }).format(date);
   }
 
-  function renderSummary() {
-    const active = requests.filter((item) => !item.isDeleted);
-    const cards = [{ key: "ALL", label: "전체", count: active.length }].concat(statuses.map((key) => ({
-      key, label: statusNames[key], count: active.filter((item) => item.status === key).length
+  function renderSummary(visible) {
+    const cards = [{key: "ALL", label: "전체", count: visible.length}].concat(statuses.map(key => ({
+      key, label: statusNames[key], count: visible.filter(item => item.status === key).length
     })));
-    summary.innerHTML = cards.map((item) => `<div class="summary-card"><span>${item.label}</span><strong>${item.count}</strong></div>`).join("");
+    summary.innerHTML = cards.map(item =>
+      `<div class="summary-card"><span>${item.label}</span><strong>${item.count}</strong></div>`
+    ).join("");
   }
 
   function reportInfo(item) {
   const source = String(item.content || "");
-  const type = source.match(/^문제 유형: (실기문제|기술면접)$/m)?.[1];
+  const type = source.match(/^문제 유형: (실기문제|기술면접|기초 학습문제|기초학습문제)$/m)?.[1];
   const id = source.match(/^문제 ID: ([A-Za-z0-9_-]{1,80})$/m)?.[1];
   const rawUrl = source.match(/^문제 화면: (https:\/\/[^\s]+)$/m)?.[1];
   if (!type || !id || !rawUrl) return null;
   try {
     const url = new URL(rawUrl);
-    const page = type === "실기문제" ? "/practical.html" : "/interview.html";
+    const page = type === "실기문제" ? "/practical.html" : type === "기술면접" ? "/interview.html" : "/coding.html";
     if (url.origin !== "https://portal.k-bigdata.kr" || url.pathname !== page || url.searchParams.get("id") !== id) return null;
-    return { type, id, url: url.href, kind: type === "실기문제" ? "practical" : "interview" };
+    return { type, id, url: url.href, kind: type === "실기문제" ? "practical" : type === "기술면접" ? "interview" : "coding" };
   } catch (_) { return null; }
 }
 
@@ -81,27 +90,70 @@
       </details>`;
 }
 
+  function localDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-US", {
+      year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Seoul"
+    }).formatToParts(date);
+    const part = type => parts.find(item => item.type === type)?.value || "";
+    return part("year") + "-" + part("month") + "-" + part("day");
+  }
+
+  function filteredRequests() {
+    const selected = filter.value;
+    const kind = kindFilter.value;
+    const scope = deletedFilter.value;
+    const query = searchInput.value.trim().toLocaleLowerCase();
+    const from = dateFrom.value;
+    const to = dateTo.value;
+    const direction = sortOrder.value === "oldest" ? 1 : -1;
+    return requests.filter(item => {
+      if (scope === "active" && item.isDeleted) return false;
+      if (scope === "deleted" && !item.isDeleted) return false;
+      if (selected !== "ALL" && item.status !== selected) return false;
+      if (kind !== "ALL" && kind !== (reportInfo(item)?.kind || "other")) return false;
+      const day = localDate(item.createdAt);
+      if ((from && day < from) || (to && day > to)) return false;
+      if (!query) return true;
+      return [
+        item.requestId, item.title, item.content, item.studentName, item.studentId,
+        item.category, item.location
+      ].some(value => String(value || "").toLocaleLowerCase().includes(query));
+    }).sort((a, b) => direction * (
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
+      String(a.requestId).localeCompare(String(b.requestId))
+    ));
+  }
+
   function renderList() {
-  const selected = filter.value;
-  const kind = kindFilter.value;
-  const visible = requests.filter(item => {
-    const report = reportInfo(item);
-    return (selected === "ALL" || item.status === selected) &&
-      (kind === "ALL" || kind === (report?.kind || "other"));
-  });
-  const groups = new Map();
-  visible.forEach(item => {
-    const report = reportInfo(item);
-    const key = report ? `${report.kind}:${report.id}` : `ticket:${item.requestId}`;
-    if (!groups.has(key)) groups.set(key, { report, items: [] });
-    groups.get(key).items.push(item);
-  });
-  list.innerHTML = visible.length ? Array.from(groups.values()).map(group => {
-    const tickets = group.items.map(renderTicket).join("");
-    if (!group.report) return tickets;
-    return `<section class="admin-report-group"><h3>${escapeHtml(group.report.type)} · ${escapeHtml(group.report.id)} <small>접수 ${group.items.length}건</small></h3>${tickets}</section>`;
-  }).join("") : '<div class="empty-state">조건에 맞는 요청이 없습니다.</div>';
-}
+    const visible = filteredRequests();
+    renderSummary(visible);
+    const pageSize = Math.max(1, Number(pageSizeInput.value) || 20);
+    const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+    currentPage = Math.max(1, Math.min(currentPage, totalPages));
+    const first = (currentPage - 1) * pageSize;
+    const pageItems = visible.slice(first, first + pageSize);
+    const groups = new Map();
+    pageItems.forEach(item => {
+      const report = reportInfo(item);
+      const key = report ? `${report.kind}:${report.id}` : `ticket:${item.requestId}`;
+      if (!groups.has(key)) groups.set(key, {report, items: []});
+      groups.get(key).items.push(item);
+    });
+    list.innerHTML = pageItems.length ? Array.from(groups.values()).map(group => {
+      const tickets = group.items.map(renderTicket).join("");
+      if (!group.report) return tickets;
+      return `<section class="admin-report-group"><h3>${escapeHtml(group.report.type)} · ${escapeHtml(group.report.id)} <small>이 페이지 ${group.items.length}건</small></h3>${tickets}</section>`;
+    }).join("") : '<div class="empty-state">조건에 맞는 요청이 없습니다.</div>';
+    const start = visible.length ? first + 1 : 0;
+    const end = Math.min(visible.length, first + pageSize);
+    resultCount.textContent = `총 ${visible.length.toLocaleString("ko-KR")}건 중 ${start}–${end}건 표시`;
+    pager.innerHTML = totalPages > 1 ? `
+      <button type="button" data-page="${currentPage - 1}" ${currentPage === 1 ? "disabled" : ""}>이전</button>
+      <span aria-live="polite">${currentPage} / ${totalPages} 페이지</span>
+      <button type="button" data-page="${currentPage + 1}" ${currentPage === totalPages ? "disabled" : ""}>다음</button>` : "";
+  }
 
   async function load() {
     notice.textContent = "불러오는 중...";
@@ -110,8 +162,7 @@
       return;
     }
     try {
-      requests = await window.BigDataHelpAPI.adminList(includeDeleted.checked, adminSessionToken);
-      renderSummary();
+      requests = await window.BigDataHelpAPI.adminList(true, adminSessionToken);
       renderList();
       notice.textContent = "";
     } catch (error) {
@@ -127,9 +178,22 @@
     }
   }
 
-  filter.addEventListener("change", renderList);
-  kindFilter.addEventListener("change", renderList);
-  includeDeleted.addEventListener("change", load);
+  [filter, kindFilter, deletedFilter, dateFrom, dateTo, sortOrder, pageSizeInput].forEach(control => {
+    control.addEventListener("change", () => {
+      currentPage = 1;
+      renderList();
+    });
+  });
+  searchInput.addEventListener("input", () => {
+    currentPage = 1;
+    renderList();
+  });
+  pager.addEventListener("click", event => {
+    const button = event.target.closest("button[data-page]");
+    if (!button || button.disabled) return;
+    currentPage = Math.max(1, Number(button.dataset.page) || 1);
+    renderList();
+  });
   list.addEventListener("submit", async (event) => {
     const form = event.target.closest(".admin-update-form");
     if (!form) return;
