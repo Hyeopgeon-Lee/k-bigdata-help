@@ -262,3 +262,22 @@ test('public request list supports safe pagination and never exposes private fie
   assert.equal(last.page, last.totalPages);
   assert.equal(last.requests.every(item => item.status === 'COMPLETED'), true);
 });
+
+test('request listing screens have expected filters, navigation and browser code', () => {
+  const home = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const publicPage = readFileSync(new URL('../requests.html', import.meta.url), 'utf8');
+  const adminPage = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
+  const adminJs = readFileSync(new URL('../js/admin.js', import.meta.url), 'utf8');
+  const publicJs = readFileSync(new URL('../js/requests.js', import.meta.url), 'utf8');
+  assert.match(home, /href="requests\.html"/);
+  assert.match(publicPage, /id="public-pagination"/);
+  assert.match(publicPage, /id="public-status"/);
+  for (const id of ['deleted-filter', 'request-kind-filter', 'status-filter', 'request-search',
+                    'date-from', 'date-to', 'sort-order', 'page-size', 'admin-pagination']) {
+    assert.ok(adminPage.includes('id="' + id + '"'), id);
+  }
+  assert.match(adminPage, /value="coding"/);
+  assert.match(adminJs, /adminList\(true, adminSessionToken\)/);
+  assert.doesNotThrow(() => new vm.Script(adminJs));
+  assert.doesNotThrow(() => new vm.Script(publicJs));
+});
