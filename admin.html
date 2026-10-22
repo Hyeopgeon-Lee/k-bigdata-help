@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#0b1739"><title>관리자 | BigData Help</title><link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css?v=20261020-unified-layout-1">
+  <meta name="theme-color" content="#0b1739"><title>관리자 | BigData Help</title><link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css?v=20261022-listing-1">
 </head>
 <body class="admin-page">
   <header class="site-header">
@@ -34,14 +34,37 @@
     <p id="admin-notice" class="notice" role="status"></p>
     <div id="admin-workspace" hidden>
     <div id="admin-summary" class="admin-summary"></div>
-    <div class="toolbar">
-      <label>신고 구분<select id="request-kind-filter"><option value="ALL">전체 요청</option><option value="practical">실기문제 신고</option><option value="interview">기술면접 신고</option><option value="other">일반 요청</option></select></label>
-      <label>상태 필터<select id="status-filter"><option value="ALL">전체</option><option value="RECEIVED">접수</option><option value="CHECKING">확인중</option><option value="PROCESSING">처리중</option><option value="COMPLETED">완료</option></select></label>
-      <label class="check-label"><input id="include-deleted" type="checkbox"> 삭제된 요청 포함</label>
+    <div class="toolbar toolbar--filters">
+      <label for="deleted-filter">조회 범위
+        <select id="deleted-filter"><option value="active">활성 요청</option><option value="all">전체 (삭제 포함)</option><option value="deleted">삭제된 요청만</option></select>
+      </label>
+      <label for="request-kind-filter">신고 구분
+        <select id="request-kind-filter"><option value="ALL">전체 요청</option><option value="practical">실기문제 신고</option><option value="interview">기술면접 신고</option><option value="coding">기초학습 신고</option><option value="other">일반 요청</option></select>
+      </label>
+      <label for="status-filter">처리 상태
+        <select id="status-filter"><option value="ALL">전체 상태</option><option value="RECEIVED">접수</option><option value="CHECKING">확인중</option><option value="PROCESSING">처리중</option><option value="COMPLETED">완료</option></select>
+      </label>
+      <label for="request-search">요청 검색
+        <input id="request-search" type="search" placeholder="요청번호·제목·내용·요청자">
+      </label>
+      <label for="date-from">시작일
+        <input id="date-from" type="date">
+      </label>
+      <label for="date-to">종료일
+        <input id="date-to" type="date">
+      </label>
+      <label for="sort-order">정렬
+        <select id="sort-order"><option value="newest">최신 등록순</option><option value="oldest">오래된 등록순</option></select>
+      </label>
+      <label for="page-size">페이지 크기
+        <select id="page-size"><option value="20">20건씩</option><option value="50">50건씩</option></select>
+      </label>
     </div>
+    <div class="results-heading"><strong id="admin-result-count" aria-live="polite"></strong><span>위 조건에 해당하는 요청만 집계합니다.</span></div>
     <section id="admin-list" class="admin-list" aria-live="polite"></section>
+    <nav id="admin-pagination" class="pagination" aria-label="관리자 요청 페이지 이동"></nav>
     </div>
   </main>
-  <script src="js/config.js?v=20261008-magic1"></script><script src="js/api.js?v=20261022-admin-login-1"></script><script src="js/admin.js?v=20261022-admin-login-1"></script>
+  <script src="js/config.js?v=20261008-magic1"></script><script src="js/api.js?v=20261022-admin-login-1"></script><script src="js/admin.js?v=20261022-listing-1"></script>
 </body>
 </html>
