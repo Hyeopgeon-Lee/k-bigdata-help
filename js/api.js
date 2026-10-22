@@ -38,7 +38,7 @@
 
   window.BigDataHelpAPI = Object.freeze({
     isConfigured,
-    list: () => request("list"),
+    list: (options = {}) => request("list", options),
     create: (payload) => request("create", payload, "POST"),
     myRequests: (studentId, pin) => request("myRequests", { studentId, pin }, "POST"),
     deleteRequest: (requestId, studentId, pin) =>
