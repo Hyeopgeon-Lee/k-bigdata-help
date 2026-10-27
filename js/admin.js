@@ -48,15 +48,15 @@
 
   function reportInfo(item) {
   const source = String(item.content || "");
-  const type = source.match(/^문제 유형: (실기문제|기술면접|기초 학습문제|기초학습문제)$/m)?.[1];
+  const type = source.match(/^문제 유형: (실기문제|기술면접|기초 학습문제|기초학습문제|NCP 기출문제)$/m)?.[1];
   const id = source.match(/^문제 ID: ([A-Za-z0-9_-]{1,80})$/m)?.[1];
   const rawUrl = source.match(/^문제 화면: (https:\/\/[^\s]+)$/m)?.[1];
   if (!type || !id || !rawUrl) return null;
   try {
     const url = new URL(rawUrl);
-    const page = type === "실기문제" ? "/practical.html" : type === "기술면접" ? "/interview.html" : "/coding.html";
+    const page = type === "실기문제" ? "/practical.html" : type === "기술면접" ? "/interview.html" : type === "NCP 기출문제" ? "/ncp.html" : "/coding.html";
     if (url.origin !== "https://portal.k-bigdata.kr" || url.pathname !== page || url.searchParams.get("id") !== id) return null;
-    return { type, id, url: url.href, kind: type === "실기문제" ? "practical" : type === "기술면접" ? "interview" : "coding" };
+    return { type, id, url: url.href, kind: type === "실기문제" ? "practical" : type === "기술면접" ? "interview" : type === "NCP 기출문제" ? "ncp" : "coding" };
   } catch (_) { return null; }
 }
 
