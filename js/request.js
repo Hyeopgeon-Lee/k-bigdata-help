@@ -8,6 +8,23 @@
   const feedback = document.querySelector("#form-feedback");
   const success = document.querySelector("#request-success");
   const config = window.APP_CONFIG;
+  const rememberIdentity = document.querySelector("#remember-identity");
+  const identityKey = "kbigdata:help:remember-identity:v1";
+
+  // Remember only after opt-in and a successful request. Never persist the PIN.
+  try {
+    const remembered = JSON.parse(localStorage.getItem(identityKey) || "null");
+    if (remembered && typeof remembered.name === "string" && typeof remembered.studentId === "string") {
+      form.elements.studentName.value = remembered.name.slice(0, 30);
+      form.elements.studentId.value = remembered.studentId.slice(0, 20);
+      rememberIdentity.checked = true;
+    }
+  } catch (_) { /* Storage may be unavailable or contain invalid JSON. */ }
+  rememberIdentity.addEventListener("change", () => {
+    if (!rememberIdentity.checked) {
+      try { localStorage.removeItem(identityKey); } catch (_) { /* Storage disabled. */ }
+    }
+  });
 
   function fillOptions(select, values, placeholder) {
     select.innerHTML = '<option value="">' + placeholder + '</option>' +
@@ -127,6 +144,15 @@
         // Until the backend is redeployed, retain reports using legacy valid values.
         if (!report || error.message !== "VALIDATION_ERROR") throw error;
         result = await window.BigDataHelpAPI.create({ ...payload, category: "수업 관련", location: "기타" });
+      }
+      if (rememberIdentity.checked) {
+        try {
+          localStorage.setItem(identityKey, JSON.stringify({
+            name: payload.studentName, studentId: payload.studentId
+          }));
+        } catch (_) { /* Submission succeeds even if storage is blocked. */ }
+      } else {
+        try { localStorage.removeItem(identityKey); } catch (_) { /* Storage disabled. */ }
       }
       form.hidden = true;
       success.hidden = false;
