@@ -227,13 +227,13 @@ test('administrator password brute-force protection blocks repeated failures', (
   assert.throws(()=>context.adminLogin_({adminUsername:'poly',adminPassword:'test-only-password'}),/ADMIN_RATE_LIMITED/);
 });
 
-test('public admin page contains separate account fields and never a hard-coded password', () => {
+test('legacy admin UI redirects to authenticated portal and exposes no password form', () => {
   const html=readFileSync(new URL('../admin.html',import.meta.url),'utf8');
   const browser=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
-  assert.match(html,/name="adminUsername"/);
-  assert.match(html,/name="adminPassword"/);
+  assert.match(html,/https:\/\/portal\.k-bigdata\.kr\/help\.html/);
+  assert.match(html,/location\.replace\(target\.href\)/);
+  assert.doesNotMatch(html,/name="adminPassword"/);
   assert.doesNotMatch(browser,/sessionStorage\.setItem\("bigDataHelpAdminKey"/);
-  assert.doesNotMatch(html,/name="adminKey"/);
 });
 
 test('public request list supports safe pagination and never exposes private fields', () => {
@@ -263,21 +263,13 @@ test('public request list supports safe pagination and never exposes private fie
   assert.equal(last.requests.every(item => item.status === 'COMPLETED'), true);
 });
 
-test('request listing screens have expected filters, navigation and browser code', () => {
-  const home = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const publicPage = readFileSync(new URL('../requests.html', import.meta.url), 'utf8');
-  const adminPage = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
-  const adminJs = readFileSync(new URL('../js/admin.js', import.meta.url), 'utf8');
-  const publicJs = readFileSync(new URL('../js/requests.js', import.meta.url), 'utf8');
-  assert.match(home, /href="requests\.html"/);
-  assert.match(publicPage, /id="public-pagination"/);
-  assert.match(publicPage, /id="public-status"/);
-  for (const id of ['deleted-filter', 'request-kind-filter', 'status-filter', 'request-search',
-                    'date-from', 'date-to', 'sort-order', 'page-size', 'admin-pagination']) {
-    assert.ok(adminPage.includes('id="' + id + '"'), id);
+test('all legacy screens redirect and the old public API is disabled', () => {
+  for(const page of ['index.html','request.html','my.html','requests.html','admin.html']){
+    const html=readFileSync(new URL('../'+page,import.meta.url),'utf8');
+    assert.match(html,/https:\/\/portal\.k-bigdata\.kr\/help\.html/,page);
+    assert.match(html,/location\.replace\(target\.href\)/,page);
+    assert.doesNotMatch(html,/js\/(?:request|admin|requests|my)\.js/,page);
   }
-  assert.match(adminPage, /value="coding"/);
-  assert.match(adminJs, /adminList\(true, adminSessionToken\)/);
-  assert.doesNotThrow(() => new vm.Script(adminJs));
-  assert.doesNotThrow(() => new vm.Script(publicJs));
+  assert.match(source,/throw new Error\("MIGRATED_TO_PORTAL"\)/);
 });
+
