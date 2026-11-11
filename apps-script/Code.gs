@@ -62,6 +62,10 @@ function routeRequest_(params) {
   try {
     validateConfiguration_(false);
     const action = clean_(params.action);
+    // Legacy endpoint is intentionally read-only/offline after the portal migration.
+    // Source Google Sheet is kept for audit, but no unauthenticated requests or
+    // legacy PIN lookups should remain exposed to the internet.
+    throw new Error("MIGRATED_TO_PORTAL");
     let data;
     switch (action) {
       case "list": data = listPublic_(params); break;
